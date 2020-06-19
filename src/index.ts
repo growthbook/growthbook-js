@@ -16,7 +16,7 @@ const settings: ConfigInterface = {
   defaultTrackingProps: {},
 };
 
-const LOCALSTORAGE_ANONID_KEY = 'growthbook_anonid';
+const LOCALSTORAGE_ANONID_KEY = 'gbanonyid';
 
 export const init = (public_key: string): void => {
   settings.public_key = public_key;
@@ -41,30 +41,32 @@ export const setDefaultTrackingProps = (
   settings.defaultTrackingProps = defaultTrackingProps;
 };
 
-export const track = async (
+export const track = (
   event: string,
   properties: EventProperties
-): Promise<void> => {
+) => {
   if (!settings.public_key.length) {
-    throw Error('Must call growthbook.init before tracking events');
+    if(process.env.NODE_ENV !== "production") {
+      throw Error('Must call growthbook.init before tracking events');
+    }
+    return;
   }
 
-  // TODO: make this isomorphic?
-  fetch(`https://api.growthbook.io/track/${settings.public_key}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      event,
-      properties: {
-        ...settings.defaultTrackingProps,
-        ...properties,
-        anonymous_id: settings.anonymous_id,
-        user_id: settings.user_id,
-      },
-    }),
-  });
+  // TODO: make isomorphic
+  if(typeof navigator !== 'undefined' && navigator.sendBeacon) {
+    navigator.sendBeacon(
+      `https://api.growthbook.io/track/${settings.public_key}`, 
+      new Blob([JSON.stringify({
+        event,
+        properties: {
+          ...settings.defaultTrackingProps,
+          ...properties,
+          anonymous_id: settings.anonymous_id,
+          user_id: settings.user_id,
+        },
+      })], {type: 'application/json'})
+    );
+  }
 };
 
 function hashFnv32a(str: string): number {

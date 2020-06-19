@@ -21,8 +21,6 @@ When the user is authenticated:
 ```js
 import {setUserId} from 'growthbook';
 
-// This does not fire any track events. It just configures
-// future track events to contain a `user_id` property.
 setUserId("12345");
 ```
 
@@ -31,11 +29,9 @@ When the context changes (e.g. page navigation):
 ```js
 import {setDefaultTrackingProps} from 'growthbook';
 
-// This does not fire any track events. It just configures
-// future track events to contain these properties by default.
 setDefaultTrackingProps({
     page: 'careers',
-    section: 'about'
+    theme: 'darkmode'
 })
 ```
 
