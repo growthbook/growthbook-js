@@ -1,13 +1,17 @@
 import growthbook from '../src';
 import fetchMock from 'jest-fetch-mock';
 
-growthbook.init('test-key');
+growthbook.configure({
+  trackingHost: 'https://track.example.com',
+});
 
 fetchMock.enableMocks();
 
 const chooseVariation = (uid: string, test: string, weights?: any) => {
-  growthbook.setUserId(uid);
-  return growthbook.userExperiment(test, weights);
+  growthbook.configure({
+    userId: uid,
+  });
+  return growthbook.experimentByUser(test, weights);
 };
 
 describe('bucketing', () => {

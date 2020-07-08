@@ -15,7 +15,8 @@
     "build": "tsdx build",
     "test": "tsdx test",
     "lint": "tsdx lint",
-    "prepare": "tsdx build"
+    "prepare": "tsdx build",
+    "gzipsize": "gzip -c dist/growthbook.cjs.production.min.js | wc -c"
   },
   "peerDependencies": {},
   "husky": {
@@ -29,7 +30,7 @@
     "singleQuote": true,
     "trailingComma": "es5"
   },
-  "name": "growthbook-js",
+  "name": "growthbook",
   "author": "Jeremy Dorn",
   "module": "dist/growthbook-js.esm.js",
   "devDependencies": {

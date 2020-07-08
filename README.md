@@ -6,36 +6,28 @@ Small utility library to interact with the Growthbook API.
 
 `yarn add growthbook` or `npm install --save growthbook`
 
-## Usage
-
-When you initialize/bootstrap your application:
+## Configuration
 
 ```js
-import {init} from 'growthbook';
+import {configure} from 'growthbook';
 
-init("my-public-key");
+configure({
+    trackingHost: "https://track.example.com",
+    userId: "12345",
+    defaultTrackingProps: {
+        company: "Acme, inc."
+        page: "careers",
+        theme: "darkmode"
+    }
+});
 ```
 
-When the user is authenticated:
+You can call `configure` multiple times and only pass in the settings you want to modify.  This is really useful for 2 scenarios:
 
-```js
-import {setUserId} from 'growthbook';
+1.  If you have an async authentication flow and don't know the userId initially
+2.  If your default tracking props include context that may change (e.g. switching a theme, client-side routing)
 
-setUserId("12345");
-```
-
-When the context changes (e.g. page navigation):
-
-```js
-import {setDefaultTrackingProps} from 'growthbook';
-
-setDefaultTrackingProps({
-    page: 'careers',
-    theme: 'darkmode'
-})
-```
-
-When you want to track an event:
+## Event Tracking
 
 ```js
 import {track} from 'growthbook';
@@ -44,12 +36,22 @@ import {track} from 'growthbook';
 track('clicked_button', {color: 'red'});
 ```
 
-When you want to run an AB test:
+## AB Testing
+
+There are 2 methods depending on how you want to bucket visitors:
+
+-  experimentByUser
+-  experimentByDevice
+
+**experimentByUser** guarantees that the same userId will always see the same variation. If the user logs out or switches accounts, they may see a different variation.
+
+**experimentByDevice** uses a unique *anonymousId* stored in localStorage to determine variation. As long as a visitor does not clear cookies and does not switch browsers or devices, they will continue seeing the same variation.
 
 ```js
-import {userExperiment} from 'growthbook'
+import {experimentByUser} from 'growthbook'
 
-const variation = userExperiment('my-experiment-id');
+// Will be 0 or 1 (or -1 if the user is not put in the test for whatever reason)
+const variation = experimentByUser('my-experiment-id');
 
 if(variation === 1) {
     console.log('Variation');
@@ -57,4 +59,21 @@ if(variation === 1) {
 else {
     console.log('Baseline');
 }
+```
+
+### AB Testing Options
+
+Both experiment methods take a 2nd parameter *weights* that let you customize the behavior.
+
+```js
+import {experimentByUser} from 'growthbook'
+
+// Uneven weighting - 20% baseline, 80% variation
+const variation = experimentByUser('my-experiment-id', [0.2, 0.8]);
+
+// Reduced test coverage - 10% baseline, 10% variation, 80% not in test
+const variation2 = experimentByUser('my-experiment-id', [0.1, 0.1]);
+
+// More than 2 variations - will return 0, 1, or 2 (or -1 if user is not put in test)
+const variation3 = experimentByUser('my-experiment-id', [0.34, 0.33, 0.33]);
 ```
