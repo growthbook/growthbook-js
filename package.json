@@ -34,7 +34,7 @@
     "singleQuote": true,
     "trailingComma": "es5"
   },
-  "name": "growthbook",
+  "name": "@growthbook/growthbook",
   "author": "Jeremy Dorn",
   "module": "dist/growthbook-js.esm.js",
   "devDependencies": {
