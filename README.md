@@ -4,7 +4,11 @@ Small utility library to interact with the Growthbook API.
 
 ## Installation
 
-`yarn add @growthbook/growthbook` or `npm install --save @growthbook/growthbook`
+`yarn add @growthbook/growthbook` 
+
+or 
+
+`npm install --save @growthbook/growthbook`
 
 ## Configuration
 
@@ -50,32 +54,66 @@ There are 2 methods depending on how you want to bucket visitors:
 ```js
 import {experimentByUser} from '@growthbook/growthbook'
 
-// Will be 0 or 1 (or -1 if the user is not put in the test for whatever reason)
+// Default: 2-way test, 50/50 traffic split
 const variation = experimentByUser('my-experiment-id');
 
 if(variation === 1) {
     console.log('Variation');
 }
-else {
+else if(variation === 0) {
     console.log('Baseline');
 }
 ```
 
 ### AB Testing Options
 
-Both experiment methods take a 2nd parameter *weights* that let you customize the behavior.
+Both experiment methods take a 2nd options parameter to control weights, coverage, and number of variations.
+
+#### Number of Variations
 
 ```js
 import {experimentByUser} from '@growthbook/growthbook'
 
-// Uneven weighting - 20% baseline, 80% variation
-const variation = experimentByUser('my-experiment-id', [0.2, 0.8]);
+// 3-way test
+const variation = experimentByUser('my-3-way-test', {variations: 3});
 
-// Reduced test coverage - 10% baseline, 10% variation, 80% not in test
-const variation2 = experimentByUser('my-experiment-id', [0.1, 0.1]);
+if(variation === 2) {
+    console.log('Variation 2');
+}
+else if(variation === 1) {
+    console.log('Variation 1');
+}
+else {
+    console.log('Baseline (Variation 0)');
+}
+```
 
-// More than 2 variations - will return 0, 1, or 2 (or -1 if user is not put in test)
-const variation3 = experimentByUser('my-experiment-id', [0.34, 0.33, 0.33]);
+#### Traffic Coverage
+
+The default config includes 100% of visitors in the test.  If you lower this, some users will be put in variation `-1` and won't be part of the test.  Usually, you want to treat these users the same as the baseline.
+
+```js
+// Only 30% of users will be in the test
+const variation = experimentByUser('low-coverage', {coverage: 0.3});
+
+if(variation === 1) {
+    console.log('Variation');
+}
+else if(variation === 0) {
+    console.log('Baseline');
+}
+else if(variation === -1) {
+    console.log('Not in Test');
+}
+```
+
+#### Weighting
+
+The default behavior is to evenly split traffic between all variations.
+
+```js
+// 80% in the baseline, 20% in variation
+const variation = experimentByUser('80-20-weighting', {weights: [0.8, 0.2]});
 ```
 
 ### Forcing Variations
@@ -91,7 +129,7 @@ During development or testing, you often want to force a specific variation.  Th
     configure({
         experimentConfig: {
             // Force variation 1
-            'my-experiment-id': 1
+            'my-experiment-id': {variation: 1}
         }
     })
     ```

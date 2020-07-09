@@ -53,11 +53,51 @@ const getQueryStringOverride = (id: string) => {
   return null;
 };
 
+export type ExperimentOptions = {
+  coverage?: number;
+  variations?: number;
+  weights?: number[];
+};
+
+const getWeightsFromOptions = (options: ExperimentOptions) => {
+  // 2-way test by default
+  let variations = options.variations || 2;
+  if (variations < 2 || variations > 20) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Experiment variations must be between 2 and 20');
+    }
+    variations = 2;
+  }
+
+  // Full coverage by default
+  let coverage = options.coverage || 1;
+  if (coverage <= 0 || coverage > 1) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error(
+        'Experiment coverage must be greater than 0 and less than or equal to 1'
+      );
+    }
+    coverage = 1;
+  }
+
+  // Equal weights by default
+  let weights = options.weights || new Array(variations).fill(1 / variations);
+  if (weights.length !== variations) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Experiment weights for every variation must be specified');
+    }
+    weights = new Array(variations).fill(1 / variations);
+  }
+
+  // Scale weights by traffic coverage
+  return weights.map(n => n * coverage);
+};
+
 const experimentsTracked = new Map();
 const experiment = (
   id: string,
   uid: string | null,
-  weights: number[]
+  options: ExperimentOptions
 ): number => {
   // If experiments are disabled globally
   if (!config.enableExperiments) {
@@ -68,23 +108,30 @@ const experiment = (
   if (config.experimentQueryStringOverride) {
     let override = getQueryStringOverride(id);
     if (override !== null) {
-      if (override >= weights.length) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.warn(
-            `Experiment querystring override for ${id} set to ${override}, but the max is ${weights.length -
-              1}. Using ${weights.length - 1} instead.`
-          );
-        }
-        override = weights.length - 1;
-      }
       return override;
     }
   }
 
-  // If experiment is stopped, immediately return the selected variation
+  let optionsClone = { ...options };
+
+  // If experiment settings are overridden in config
   if (id in config.experimentConfig) {
-    return config.experimentConfig[id];
+    // If experiment is stopped, return variation immediately
+    if ('variation' in config.experimentConfig[id]) {
+      return config.experimentConfig[id].variation || 0;
+    }
+
+    // Weights overridden
+    if (config.experimentConfig[id].weights) {
+      optionsClone.weights = config.experimentConfig[id].weights;
+    }
+    // Coverage overridden
+    if (config.experimentConfig[id].coverage) {
+      optionsClone.coverage = config.experimentConfig[id].coverage;
+    }
   }
+
+  const weights = getWeightsFromOptions(optionsClone);
 
   // Hash unique id and experiment id to randomly choose a variation given weights
   const variation = chooseVariation(uid, id, weights);
@@ -106,10 +153,10 @@ const experiment = (
   return variation;
 };
 
-export const experimentByUser = (id: string, weights: number[] = [0.5, 0.5]) =>
-  experiment(id, config.userId, weights);
+export const experimentByUser = (id: string, options: ExperimentOptions = {}) =>
+  experiment(id, config.userId, options);
 
 export const experimentByDevice = (
   id: string,
-  weights: number[] = [0.5, 0.5]
-) => experiment(id, config.anonymousId, weights);
+  options: ExperimentOptions = {}
+) => experiment(id, config.anonymousId, options);

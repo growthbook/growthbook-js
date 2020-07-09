@@ -3,7 +3,11 @@ export interface EventProperties {
 }
 
 export interface ExperimentConfig {
-  [key: string]: number;
+  [key: string]: {
+    variation?: number;
+    weights?: number[];
+    coverage?: number;
+  };
 }
 
 export type TrackFunction = (
