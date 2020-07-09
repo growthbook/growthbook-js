@@ -4,12 +4,12 @@ Small utility library to interact with the Growthbook API.
 
 ## Installation
 
-`yarn add growthbook` or `npm install --save growthbook`
+`yarn add @growthbook/growthbook` or `npm install --save @growthbook/growthbook`
 
 ## Configuration
 
 ```js
-import {configure} from 'growthbook';
+import {configure} from '@growthbook/growthbook';
 
 configure({
     trackingHost: "https://track.example.com",
@@ -30,7 +30,7 @@ You can call `configure` multiple times and only pass in the settings you want t
 ## Event Tracking
 
 ```js
-import {track} from 'growthbook';
+import {track} from '@growthbook/growthbook';
 
 // Event name and whatever event properties you want to track
 track('clicked_button', {color: 'red'});
@@ -48,7 +48,7 @@ There are 2 methods depending on how you want to bucket visitors:
 **experimentByDevice** uses a unique *anonymousId* stored in localStorage to determine variation. As long as a visitor does not clear cookies and does not switch browsers or devices, they will continue seeing the same variation.
 
 ```js
-import {experimentByUser} from 'growthbook'
+import {experimentByUser} from '@growthbook/growthbook'
 
 // Will be 0 or 1 (or -1 if the user is not put in the test for whatever reason)
 const variation = experimentByUser('my-experiment-id');
@@ -66,7 +66,7 @@ else {
 Both experiment methods take a 2nd parameter *weights* that let you customize the behavior.
 
 ```js
-import {experimentByUser} from 'growthbook'
+import {experimentByUser} from '@growthbook/growthbook'
 
 // Uneven weighting - 20% baseline, 80% variation
 const variation = experimentByUser('my-experiment-id', [0.2, 0.8]);
@@ -86,7 +86,7 @@ During development or testing, you often want to force a specific variation.  Th
 
 1.  Explicit mapping:
     ```js
-    import {configure} from 'growthbook';
+    import {configure} from '@growthbook/growthbook';
 
     configure({
         experimentConfig: {
@@ -97,7 +97,7 @@ During development or testing, you often want to force a specific variation.  Th
     ```
 2.  Querystring parameters:
     ```js
-    import {configure} from 'growthbook';
+    import {configure} from '@growthbook/growthbook';
 
     configure({
         // Default is false
@@ -108,7 +108,7 @@ During development or testing, you often want to force a specific variation.  Th
     ```
 3.  Disable all experiments globally (useful for automated testing)
     ```js
-    import {configure} from 'growthbook';
+    import {configure} from '@growthbook/growthbook';
 
     configure({
         // Default is true
@@ -126,7 +126,7 @@ You can customize this behavior by providing your own callback instead.  This ca
 **Note:** Tracking is not called when the variation is `-1` or when the variation was forced via any of the above methods.
 
 ```js
-import {configure} from 'growthbook';
+import {configure} from '@growthbook/growthbook';
 
 // Segment example
 configure({
