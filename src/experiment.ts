@@ -36,17 +36,57 @@ function chooseVariation(
   return -1;
 }
 
+const getQueryStringOverride = (id: string) => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const match = window.location.search
+    .substring(1)
+    .split('&')
+    .map(kv => kv.split('=', 2))
+    .filter(([k]) => k === id)
+    .map(([, v]) => parseInt(v));
+
+  if (match.length > 0 && match[0] >= -1 && match[0] < 10) return match[0];
+
+  return null;
+};
+
 const experimentsTracked = new Map();
 const experiment = (
   id: string,
   uid: string | null,
   weights: number[]
 ): number => {
+  // If experiments are disabled globally
+  if (!config.enableExperiments) {
+    return -1;
+  }
+
+  // If querystring override is enabled
+  if (config.experimentQueryStringOverride) {
+    let override = getQueryStringOverride(id);
+    if (override !== null) {
+      if (override >= weights.length) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn(
+            `Experiment querystring override for ${id} set to ${override}, but the max is ${weights.length -
+              1}. Using ${weights.length - 1} instead.`
+          );
+        }
+        override = weights.length - 1;
+      }
+      return override;
+    }
+  }
+
   // If experiment is stopped, immediately return the selected variation
   if (id in config.experimentConfig) {
     return config.experimentConfig[id];
   }
 
+  // Hash unique id and experiment id to randomly choose a variation given weights
   const variation = chooseVariation(uid, id, weights);
 
   // Only track an experiment once per user/test

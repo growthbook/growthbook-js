@@ -1,5 +1,6 @@
-import { ExperimentConfig, config } from './config';
+import { config } from './config';
 import { track } from './track';
+import { ExperimentConfig } from './types';
 
 interface GrowthbookData {
   experiments: ExperimentConfig;

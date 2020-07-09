@@ -1,12 +1,25 @@
-import { EventProperties, config } from './config';
-
-const trackQueue: [string, EventProperties][] = [];
+import { config } from './config';
+import { queueEvent, setProcessFunction } from './queue';
+import { EventProperties } from './types';
 
 export const track = (event: string, properties: EventProperties) => {
-  if (!config.trackingHost) {
-    trackQueue.push([event, properties]);
+  const props = {
+    ...config.defaultTrackingProps,
+    ...properties,
+  };
+
+  // Use the provided track method instead of the built-in one
+  if (config.trackOverride) {
+    config.trackOverride(event, props);
     return;
   }
+
+  // Tracking host hasn't been configured yet, queue up events
+  if (!config.trackingHost) {
+    queueEvent(event, properties);
+    return;
+  }
+  // Not in a modern browser, skip
   if (typeof fetch === 'undefined') {
     return;
   }
@@ -19,10 +32,7 @@ export const track = (event: string, properties: EventProperties) => {
         url: window.location.href,
         referrer: document.referrer,
         event,
-        properties: {
-          ...config.defaultTrackingProps,
-          ...properties,
-        },
+        properties: props,
       })
     )}`,
     {
@@ -38,8 +48,4 @@ export const track = (event: string, properties: EventProperties) => {
   });
 };
 
-export const onInit = () => {
-  trackQueue.forEach(queue => {
-    track(...queue);
-  });
-};
+setProcessFunction(track);
