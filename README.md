@@ -1,6 +1,6 @@
-# Growthbook Javascript Library
+# Growth Book Javascript Library
 
-Small utility library to interact with the Growthbook API.
+Small utility library to track website events and run AB tests using the Growth Book platform.
 
 ## Installation
 
