@@ -86,6 +86,45 @@ describe('bucketing', () => {
 
     expect(fetchMock.mock.calls.length).toEqual(3);
   });
-});
 
-// TODO: test tracking
+  it('forced', () => {
+    fetchMock.mockResponse(JSON.stringify({}));
+    expect(chooseVariation('6', 'forced-test')).toEqual(0);
+    growthbook.configure({
+      experimentConfig: {
+        'forced-test': 1,
+      },
+    });
+    expect(chooseVariation('6', 'forced-test')).toEqual(1);
+    growthbook.resetExperimentConfig();
+  });
+
+  it('forced, tracking disabled', () => {
+    fetchMock.mockResponse(JSON.stringify({}));
+    growthbook.configure({
+      experimentConfig: {
+        'forced-test-2': 1,
+      },
+    });
+    chooseVariation('1', 'forced-test-2');
+    growthbook.resetExperimentConfig();
+
+    expect(fetchMock.mock.calls.length).toEqual(0);
+  });
+
+  it('experiments disabled', () => {
+    fetchMock.mockResponse(JSON.stringify({}));
+
+    growthbook.configure({
+      enableExperiments: false,
+    });
+
+    expect(chooseVariation('1', 'disabled-test')).toEqual(-1);
+
+    growthbook.configure({
+      enableExperiments: true,
+    });
+
+    expect(fetchMock.mock.calls.length).toEqual(0);
+  });
+});

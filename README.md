@@ -80,20 +80,22 @@ const variation3 = experimentByUser('my-experiment-id', [0.34, 0.33, 0.33]);
 
 ### Forcing Variations
 
-During development or testing, you often want to force a specific variation.  There are 3 ways to do this:
+During development or testing, you often want to force a specific variation.  There are 3 ways to do this.
 
-1.  Explicit:
+**Note:** When a variation is forced, it will not fire a tracking event.
+
+1.  Explicit mapping:
     ```js
     import {configure} from 'growthbook';
 
     configure({
         experimentConfig: {
-            // Force variation 1 (also disables event tracking for this test)
+            // Force variation 1
             'my-experiment-id': 1
         }
     })
     ```
-2.  Via querystring parameters
+2.  Querystring parameters:
     ```js
     import {configure} from 'growthbook';
 
@@ -115,17 +117,26 @@ During development or testing, you often want to force a specific variation.  Th
     })
     ```
 
-## Custom Track Method
+### Custom Track Method
 
-If you only want to use Growth Book for AB testing, you can override the built-in event tracking code:
+By default, choosing a variation triggers a track event `viewed_experiment` with properties `experiment` and `variation`.
+
+You can customize this behavior by providing your own callback instead.  This can even be used to integrate with 3rd party libraries like Segment.
+
+**Note:** Tracking is not called when the variation is `-1` or when the variation was forced via any of the above methods.
 
 ```js
 import {configure} from 'growthbook';
 
 // Segment example
 configure({
-    trackOverride: (eventName, properties) => {
-        analytics.track(eventName, properties);
+    trackExperimentOverride: (experiment, variation) => {
+        analytics.track('Experiment Viewed', {
+            experiment_id: experiment,
+            experiment_name: experiment,
+            variation_id: variation,
+            variation_name: variation
+        });
     }
 });
 ```

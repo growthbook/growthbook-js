@@ -92,10 +92,15 @@ const experiment = (
   // Only track an experiment once per user/test
   if (variation !== -1 && !experimentsTracked.has(uid + id)) {
     experimentsTracked.set(uid + id, variation);
-    track('viewed_experiment', {
-      experiment: id,
-      variation,
-    });
+
+    if (config.trackExperimentOverride) {
+      config.trackExperimentOverride(id, variation);
+    } else {
+      track('viewed_experiment', {
+        experiment: id,
+        variation,
+      });
+    }
   }
 
   return variation;

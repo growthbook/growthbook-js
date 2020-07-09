@@ -2,17 +2,11 @@ import { config } from './config';
 import { queueEvent, setProcessFunction } from './queue';
 import { EventProperties } from './types';
 
-export const track = (event: string, properties: EventProperties) => {
+export const track = (event: string, properties: EventProperties = {}) => {
   const props = {
     ...config.defaultTrackingProps,
     ...properties,
   };
-
-  // Use the provided track method instead of the built-in one
-  if (config.trackOverride) {
-    config.trackOverride(event, props);
-    return;
-  }
 
   // Tracking host hasn't been configured yet, queue up events
   if (!config.trackingHost) {

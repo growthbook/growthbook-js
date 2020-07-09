@@ -7,7 +7,7 @@ export const config: ConfigInterface = {
   anonymousId: null,
   defaultTrackingProps: {},
   experimentConfig: {},
-  trackOverride: null,
+  trackExperimentOverride: null,
   experimentQueryStringOverride: false,
   enableExperiments: true,
 };
@@ -41,7 +41,7 @@ export const configure = (c: Partial<ConfigInterface>) => {
   }
 
   // Process any queued track events
-  if (config.trackingHost || config.trackOverride) {
+  if (config.trackingHost) {
     processQueue();
   }
 };

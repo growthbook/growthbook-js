@@ -11,13 +11,18 @@ export type TrackFunction = (
   properties: EventProperties
 ) => void;
 
+export type TrackExperimentFunction = (
+  experiment: string,
+  variation: number
+) => void;
+
 export interface ConfigInterface {
   trackingHost: string | null;
   userId: string | null;
   anonymousId: string | null;
   defaultTrackingProps: EventProperties;
   experimentConfig: ExperimentConfig;
-  trackOverride: TrackFunction | null;
+  trackExperimentOverride: TrackExperimentFunction | null;
   experimentQueryStringOverride: boolean;
   enableExperiments: boolean;
 }
