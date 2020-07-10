@@ -53,6 +53,42 @@ const getQueryStringOverride = (id: string) => {
   return null;
 };
 
+const getPersistedVariations = (): { [key: string]: number } => {
+  if (typeof window === 'undefined') return {};
+  try {
+    const mapping = window.localStorage.getItem('gb_test_mapping');
+    if (!mapping) return {};
+    const decoded = JSON.parse(mapping);
+    return decoded || {};
+  } catch (e) {
+    // Ignore localstorage errors
+    return {};
+  }
+};
+const getPersistedVariation = (testId: string, uid: string) => {
+  const mapping = getPersistedVariations();
+  const k = testId+uid;
+  if(k in mapping) return mapping[k];
+  return null;
+};
+const setPersistedVariation = (
+  testId: string,
+  uid: string,
+  variation: number
+) => {
+  try {
+    window.localStorage.setItem(
+      'gb_test_mapping',
+      JSON.stringify({
+        ...getPersistedVariations(),
+        [testId + uid]: variation,
+      })
+    );
+  } catch (e) {
+    // Ignore localstorage errors
+  }
+};
+
 export type ExperimentOptions = {
   coverage?: number;
   variations?: number;
@@ -97,7 +133,8 @@ const experimentsTracked = new Map();
 const experiment = (
   id: string,
   uid: string | null,
-  options: ExperimentOptions
+  options: ExperimentOptions,
+  persistLocalStorage: boolean
 ): number => {
   // If experiments are disabled globally
   if (!config.enableExperiments) {
@@ -131,10 +168,25 @@ const experiment = (
     }
   }
 
+  if (!uid) {
+    return -1;
+  }
+
+  if (persistLocalStorage) {
+    const existingVariation = getPersistedVariation(id, uid);
+    if (existingVariation !== null) {
+      return existingVariation;
+    }
+  }
+
   const weights = getWeightsFromOptions(optionsClone);
 
   // Hash unique id and experiment id to randomly choose a variation given weights
   const variation = chooseVariation(uid, id, weights);
+
+  if (persistLocalStorage) {
+    setPersistedVariation(id, uid, variation);
+  }
 
   // Only track an experiment once per user/test
   if (variation !== -1 && !experimentsTracked.has(uid + id)) {
@@ -154,9 +206,9 @@ const experiment = (
 };
 
 export const experimentByUser = (id: string, options: ExperimentOptions = {}) =>
-  experiment(id, config.userId, options);
+  experiment(id, config.userId, options, false);
 
 export const experimentByDevice = (
   id: string,
   options: ExperimentOptions = {}
-) => experiment(id, config.anonymousId, options);
+) => experiment(id, config.anonymousId, options, true);

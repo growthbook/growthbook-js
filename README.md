@@ -69,6 +69,8 @@ else if(variation === 0) {
 
 Both experiment methods take a 2nd options parameter to control weights, coverage, and number of variations.
 
+**Important:** If doing `experimentByUser`, don't change these options mid-way through a test. It will cause some users to swap variations and will mess up any statistical analysis you try to do.
+
 #### Number of Variations
 
 ```js

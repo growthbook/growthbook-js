@@ -1,5 +1,5 @@
 {
-  "version": "0.1.2",
+  "version": "0.1.3",
   "license": "MIT",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
@@ -40,8 +40,12 @@
   "devDependencies": {
     "husky": "^4.2.5",
     "jest-fetch-mock": "^3.0.3",
+    "jest-localstorage-mock": "^2.4.2",
     "tsdx": "^0.13.2",
     "tslib": "^2.0.0",
     "typescript": "^3.9.5"
+  },
+  "jest": {
+    "setupFiles": ["jest-localstorage-mock"]
   }
 }

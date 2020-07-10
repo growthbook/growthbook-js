@@ -160,4 +160,28 @@ describe('bucketing', () => {
 
     expect(fetchMock.mock.calls.length).toEqual(0);
   });
+
+  it('localStorage persist', () => {
+    fetchMock.mockResponse(JSON.stringify({}));
+
+    growthbook.configure({
+      anonymousId: '12345',
+      userId: '12345',
+    });
+    // Device experiments should persist the variation in local storage and ignore weight changes
+    expect(
+      growthbook.experimentByDevice('my-device-test', { weights: [0.99, 0.01] })
+    ).toEqual(0);
+    expect(
+      growthbook.experimentByDevice('my-device-test', { weights: [0.01, 0.99] })
+    ).toEqual(0);
+
+    // User experiments should NOT use local storage and instead change when the weights change
+    expect(
+      growthbook.experimentByUser('my-user-test', { weights: [0.01, 0.99] })
+    ).toEqual(1);
+    expect(
+      growthbook.experimentByUser('my-user-test', { weights: [0.99, 0.01] })
+    ).toEqual(0);
+  });
 });
