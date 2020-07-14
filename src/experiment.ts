@@ -67,8 +67,8 @@ const getPersistedVariations = (): { [key: string]: number } => {
 };
 const getPersistedVariation = (testId: string, uid: string) => {
   const mapping = getPersistedVariations();
-  const k = testId+uid;
-  if(k in mapping) return mapping[k];
+  const k = testId + uid;
+  if (k in mapping) return mapping[k];
   return null;
 };
 const setPersistedVariation = (
