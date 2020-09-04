@@ -1,19 +1,18 @@
-export interface EventProperties {
+export interface UserAttributes {
   [key: string]: any;
 }
 
-export interface ExperimentConfig {
-  [key: string]: {
-    variation?: number;
-    weights?: number[];
-    coverage?: number;
-  };
+export interface ExperimentParams {
+  variations?: number;
+  weights?: number[];
+  coverage?: number;
+  targeting?: string[];
+  force?: number;
 }
 
-export type TrackFunction = (
-  event: string,
-  properties: EventProperties
-) => void;
+export interface ExperimentsConfig {
+  [key: string]: ExperimentParams;
+}
 
 export type TrackExperimentFunction = (
   experiment: string,
@@ -21,12 +20,10 @@ export type TrackExperimentFunction = (
 ) => void;
 
 export interface ConfigInterface {
-  trackingHost: string | null;
-  userId: string | null;
-  anonymousId: string | null;
-  defaultTrackingProps: EventProperties;
-  experimentConfig: ExperimentConfig;
-  trackExperimentOverride: TrackExperimentFunction | null;
-  experimentQueryStringOverride: boolean;
-  enableExperiments: boolean;
+  enabled?: boolean;
+  onAssignment?: TrackExperimentFunction;
+  enableQueryStringOverride?: boolean;
+  uuid?: string;
+  attributes?: UserAttributes;
+  experiments?: ExperimentsConfig;
 }
