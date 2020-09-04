@@ -20,7 +20,7 @@ configure({
     // User id of the visitor (can omit if the visitor is logged out)
     uuid: "12345",
 
-    // Callback when the user is put in a test (use to fire tracking events)
+    // Callback when the user is put in a test
     onAssignment: (experiment, variation) => {
         // Example: Segment integration
         analytics.track("Experiment Viewed", {
@@ -64,7 +64,7 @@ configure({
         source: "google"
     },
 
-    // Define experiment parameters
+    // Customize experiment options beyond simple 50/50 split tests
     experiments: {
         "my-unique-experiment-key": {
             // Number of variations
@@ -86,11 +86,31 @@ configure({
     },
 
     // Default false. Set to true to enable forcing variations via url
-    // Example; https://example.com/?my-experiment=1
-    enableQueryStringOverride: true,
+    // For example: https://example.com/?my-experiment=1
+    enableQueryStringOverride: false,
 
-    // Default true. Set to false to disable experiments entirely.
-    // Every test will return -1 immediately and all other options will be ignored.
+    // Default true. Set to false to disable all experiments.
+    // The variation returned will always be -1. This takes precedence over every other option.
     enabled: true,
+});
+```
+
+You can call `configure` as many times as you want.  All fields are optional and have sane defaults.
+
+### Inline Experiment Configuration
+
+For most use-cases, the above configuration method works perfectly for experiments.
+
+However, in some cases, you may prefer to set experiment parameters inline when doing variation assignment:
+
+```js
+import {experiment} from '@growthbook/growthbook';
+
+const variation = experiment("my-experiment-id", {
+    // Same experiment options as configure are available
+    variations: 3,
+    coverage: 0.5,
+    weights: [0.34, 0.33, 0.33],
+    targeting: ["source != google"]
 });
 ```
