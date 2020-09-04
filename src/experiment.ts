@@ -159,8 +159,8 @@ export const experiment = (id: string, options?: ExperimentParams): number => {
   let optionsClone = { ...options };
   if (config.experiments && id in config.experiments) {
     // Value is forced, return immediately
-    const {force, ...overrides} = config.experiments[id];
-    if(force !== undefined) {
+    const { force, ...overrides } = config.experiments[id];
+    if (force !== undefined) {
       return force;
     }
     Object.assign(optionsClone, overrides);

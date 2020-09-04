@@ -7,7 +7,7 @@ const chooseVariation = (
   test: string,
   options: ExperimentParams = {}
 ) => {
-  if(uuid) {
+  if (uuid) {
     growthbook.configure({
       uuid,
     });
@@ -25,15 +25,15 @@ Object.defineProperty(window, 'location', {
 });
 
 const mockCallback = () => {
-  const onAssignment = jest.fn((a,b) => {
-    return [a,b];
+  const onAssignment = jest.fn((a, b) => {
+    return [a, b];
   });
   growthbook.configure({
-    onAssignment
+    onAssignment,
   });
 
   return onAssignment.mock;
-}
+};
 
 describe('experiments', () => {
   beforeEach(() => {
