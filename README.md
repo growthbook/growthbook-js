@@ -19,15 +19,8 @@ import {configure} from '@growthbook/growthbook'
 configure({
     // User id of the visitor (can omit if the visitor is logged out)
     uuid: "12345",
-
-    // Callback when the user is put in a test
-    onAssignment: (experiment, variation) => {
-        // Example: Segment integration
-        analytics.track("Experiment Viewed", {
-            experimentId: experiment,
-            variationId: variation
-        });
-    }
+    // Track an event in Segment when the user views an experiment
+    segment: true,
 });
 ```
 
@@ -51,12 +44,15 @@ else if(variation === -1) {
 
 ## Configuration
 
-In addition to `uuid` and `onAssignment`, the configure method accepts a number of other options.
+The configure method accepts a number of options.  Everything is optional.
 
 ```js
 import {configure} from '@growthbook/growthbook';
 
 configure({
+    // User id of the visitor (can omit if the visitor is logged out)
+    uuid: "12345",
+
     // Any attributes about the user or page that you want to use for experiment targeting
     attributes: {
         premium: true,
@@ -92,6 +88,20 @@ configure({
     // Default true. Set to false to disable all experiments.
     // The variation returned will always be -1. This takes precedence over every other option.
     enabled: true,
+
+    // Default false. When true, calls `analytics.track` when an experiment is viewed
+    // Example call: analytics.track("Experiment Viewed", {experiment_id, variation_id})
+    segment: true,
+
+    // Default 0. When a positive integer, sets the specified custom dimension and fires an event using window.ga
+    // The custom dimension value is in the format "experiment_id:variation_number"
+    // The event is ga("send", "event", "experiment", experiment_id, variation_number)
+    ga: 1,
+
+    // Optional callback when the user views an experiment
+    onExperimentViewed: (experiment, variation) => {
+        console.log(experiment, variation);
+    }
 });
 ```
 

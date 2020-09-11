@@ -1,5 +1,5 @@
 import growthbook from '../src';
-import { ExperimentParams } from '../src/types';
+import { ExperimentParams, AnalyticsWindow } from '../src/types';
 import { clearExperimentsTracked } from '../src/experiment';
 
 const chooseVariation = (
@@ -25,14 +25,14 @@ Object.defineProperty(window, 'location', {
 });
 
 const mockCallback = () => {
-  const onAssignment = jest.fn((a, b) => {
+  const onExperimentViewed = jest.fn((a, b) => {
     return [a, b];
   });
   growthbook.configure({
-    onAssignment,
+    onExperimentViewed,
   });
 
-  return onAssignment.mock;
+  return onExperimentViewed.mock;
 };
 
 describe('experiments', () => {
@@ -43,10 +43,12 @@ describe('experiments', () => {
       enableQueryStringOverride: false,
       enabled: true,
       experiments: {},
-      onAssignment: () => {
+      onExperimentViewed: () => {
         // Nothing
       },
       uuid: undefined,
+      ga: undefined,
+      segment: false,
     });
     clearExperimentsTracked();
     window.location.search = '';
@@ -148,6 +150,110 @@ describe('experiments', () => {
     expect(chooseVariation('1', 'my-test')).toEqual(-1);
   });
 
+  it('targeting', () => {
+    growthbook.configure({
+      experiments: {
+        'my-test': {
+          targeting: [
+            'member = true',
+            'age > 18',
+            'source ~ (google|yahoo)',
+            'name != matt',
+            'email !~ ^.*@exclude.com$',
+          ],
+        },
+      },
+    });
+
+    // Matches all
+    growthbook.configure({
+      attributes: {
+        member: true,
+        age: 21,
+        source: 'yahoo',
+        name: 'george',
+        email: 'test@example.com',
+      },
+    });
+    expect(chooseVariation('1', 'my-test')).toEqual(1);
+
+    // Missing negative checks
+    growthbook.configure({
+      attributes: {
+        member: true,
+        age: 21,
+        source: 'yahoo',
+      },
+    });
+    expect(chooseVariation('1', 'my-test')).toEqual(1);
+
+    // Missing all attributes
+    growthbook.configure({
+      attributes: {},
+    });
+    expect(chooseVariation('1', 'my-test')).toEqual(-1);
+
+    // Fails boolean
+    growthbook.configure({
+      attributes: {
+        member: false,
+        age: 21,
+        source: 'yahoo',
+        name: 'george',
+        email: 'test@example.com',
+      },
+    });
+    expect(chooseVariation('1', 'my-test')).toEqual(-1);
+
+    // Fails number
+    growthbook.configure({
+      attributes: {
+        member: true,
+        age: 17,
+        source: 'yahoo',
+        name: 'george',
+        email: 'test@example.com',
+      },
+    });
+    expect(chooseVariation('1', 'my-test')).toEqual(-1);
+
+    // Fails regex
+    growthbook.configure({
+      attributes: {
+        member: true,
+        age: 21,
+        source: 'goog',
+        name: 'george',
+        email: 'test@example.com',
+      },
+    });
+    expect(chooseVariation('1', 'my-test')).toEqual(-1);
+
+    // Fails not equals
+    growthbook.configure({
+      attributes: {
+        member: true,
+        age: 21,
+        source: 'yahoo',
+        name: 'matt',
+        email: 'test@example.com',
+      },
+    });
+    expect(chooseVariation('1', 'my-test')).toEqual(-1);
+
+    // Fails not regex
+    growthbook.configure({
+      attributes: {
+        member: true,
+        age: 21,
+        source: 'yahoo',
+        name: 'george',
+        email: 'test@exclude.com',
+      },
+    });
+    expect(chooseVariation('1', 'my-test')).toEqual(-1);
+  });
+
   it('experiments disabled', () => {
     const mock = mockCallback();
     growthbook.configure({
@@ -180,5 +286,57 @@ describe('experiments', () => {
     expect(chooseVariation('1', 'forced-test-qs')).toEqual(1);
 
     expect(mock.calls.length).toEqual(0);
+  });
+
+  it('querystring ga segment tracking', () => {
+    const segment = jest.fn((a, b) => {
+      return [a, b];
+    });
+    const ga = jest.fn((a, b, c, d, e) => {
+      return [a, b, c, d, e];
+    });
+    (window as AnalyticsWindow).analytics = {
+      track: segment,
+    };
+    (window as AnalyticsWindow).ga = ga;
+
+    // Should not track by default
+    chooseVariation('1', 'my-test');
+    expect(segment.mock.calls.length).toEqual(0);
+    expect(ga.mock.calls.length).toEqual(0);
+
+    // Opt into tracking
+    growthbook.configure({
+      ga: 5,
+      segment: true,
+    });
+
+    // Should track now
+    expect(chooseVariation('2', 'my-test')).toEqual(0);
+    expect(segment.mock.calls.length).toEqual(1);
+    expect(segment.mock.calls[0]).toEqual([
+      'Experiment Viewed',
+      { experiment_id: 'my-test', variation_id: 0 },
+    ]);
+    expect(ga.mock.calls.length).toEqual(2);
+    expect(ga.mock.calls[0]).toEqual(['set', 'dimension5', 'my-test:0']);
+    expect(ga.mock.calls[1]).toEqual([
+      'send',
+      'event',
+      'experiment',
+      'my-test',
+      '0',
+    ]);
+  });
+
+  it('querystring missing ga and segment', () => {
+    // Opt into tracking
+    growthbook.configure({
+      ga: 5,
+      segment: true,
+    });
+
+    // No errors thrown, even though window.ga and window.analytics are missing
+    expect(chooseVariation('2', 'my-test')).toEqual(0);
   });
 });

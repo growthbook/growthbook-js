@@ -1,5 +1,5 @@
 import { config, userMap } from './config';
-import { ExperimentParams } from 'types';
+import { ExperimentParams, AnalyticsWindow } from 'types';
 
 const isNum = /^[-]?[0-9]*(\.[0-9]*)?$/;
 
@@ -136,6 +136,36 @@ const getWeightsFromOptions = (options: ExperimentParams) => {
 };
 
 const experimentsTracked = new Set();
+const trackView = (experiment: string, variation: number) => {
+  // Only track an experiment once per user/test
+  if (variation !== -1 && !experimentsTracked.has(config.uuid + experiment)) {
+    experimentsTracked.add(config.uuid + experiment);
+
+    if (typeof window !== 'undefined') {
+      const w = window as AnalyticsWindow;
+      if (config.segment) {
+        const t = w?.analytics?.track;
+        if (t) {
+          t('Experiment Viewed', {
+            experiment_id: experiment,
+            variation_id: variation,
+          });
+        }
+      }
+      if (config.ga) {
+        const g = w?.ga;
+        if (g && typeof g === 'function') {
+          g('set', `dimension${config.ga}`, experiment + ':' + variation);
+          g('send', 'event', 'experiment', experiment, variation + '');
+        }
+      }
+    }
+    if (config.onExperimentViewed) {
+      config.onExperimentViewed(experiment, variation);
+    }
+  }
+};
+
 export const experiment = (id: string, options?: ExperimentParams): number => {
   // If experiments are disabled globally
   if (!config.enabled) {
@@ -175,17 +205,7 @@ export const experiment = (id: string, options?: ExperimentParams): number => {
 
   // Hash unique id and experiment id to randomly choose a variation given weights
   const variation = chooseVariation(id, weights);
-
-  // Only track an experiment once per user/test
-  if (variation !== -1 && !experimentsTracked.has(config.uuid + id)) {
-    experimentsTracked.add(config.uuid + id);
-
-    if (config.onAssignment) {
-      config.onAssignment(id, variation);
-    } else if (process.env.NODE_ENV !== 'production') {
-      console.error('No onAssignment callback configured');
-    }
-  }
+  trackView(id, variation);
 
   return variation;
 };

@@ -7,8 +7,10 @@ export const config: ConfigInterface = {
   enableQueryStringOverride: false,
   enabled: true,
   experiments: {},
-  onAssignment: undefined,
+  onExperimentViewed: undefined,
   uuid: undefined,
+  ga: undefined,
+  segment: false,
 };
 
 const flattenUserValues = (prefix: string, val: any) => {

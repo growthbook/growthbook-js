@@ -21,9 +21,25 @@ export type TrackExperimentFunction = (
 
 export interface ConfigInterface {
   enabled?: boolean;
-  onAssignment?: TrackExperimentFunction;
+  onExperimentViewed?: TrackExperimentFunction;
   enableQueryStringOverride?: boolean;
   uuid?: string;
   attributes?: UserAttributes;
   experiments?: ExperimentsConfig;
+  segment?: boolean;
+  ga?: number;
 }
+
+export type AnalyticsWindow = typeof window & {
+  analytics?: {
+    track?: (event: string, props: any) => void;
+  };
+  ga?: (
+    func: string,
+    event: string,
+    category: string,
+    action?: string,
+    label?: string,
+    value?: number
+  ) => void;
+};
