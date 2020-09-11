@@ -1,19 +1,18 @@
-export interface EventProperties {
+export interface UserAttributes {
   [key: string]: any;
 }
 
-export interface ExperimentConfig {
-  [key: string]: {
-    variation?: number;
-    weights?: number[];
-    coverage?: number;
-  };
+export interface ExperimentParams {
+  variations?: number;
+  weights?: number[];
+  coverage?: number;
+  targeting?: string[];
+  force?: number;
 }
 
-export type TrackFunction = (
-  event: string,
-  properties: EventProperties
-) => void;
+export interface ExperimentsConfig {
+  [key: string]: ExperimentParams;
+}
 
 export type TrackExperimentFunction = (
   experiment: string,
@@ -21,12 +20,26 @@ export type TrackExperimentFunction = (
 ) => void;
 
 export interface ConfigInterface {
-  trackingHost: string | null;
-  userId: string | null;
-  anonymousId: string | null;
-  defaultTrackingProps: EventProperties;
-  experimentConfig: ExperimentConfig;
-  trackExperimentOverride: TrackExperimentFunction | null;
-  experimentQueryStringOverride: boolean;
-  enableExperiments: boolean;
+  enabled?: boolean;
+  onExperimentViewed?: TrackExperimentFunction;
+  enableQueryStringOverride?: boolean;
+  userId?: string;
+  attributes?: UserAttributes;
+  experiments?: ExperimentsConfig;
+  segment?: boolean;
+  ga?: number;
 }
+
+export type AnalyticsWindow = typeof window & {
+  analytics?: {
+    track?: (event: string, props: any) => void;
+  };
+  ga?: (
+    func: string,
+    event: string,
+    category: string,
+    action?: string,
+    label?: string,
+    value?: number
+  ) => void;
+};

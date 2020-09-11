@@ -1,5 +1,7 @@
-import { track } from './track';
-import { config } from './config';
+import { config, userMap } from './config';
+import { ExperimentParams, AnalyticsWindow } from 'types';
+
+const isNum = /^[-]?[0-9]*(\.[0-9]*)?$/;
 
 function hashFnv32a(str: string): number {
   let hval = 0x811c9dc5;
@@ -13,17 +15,65 @@ function hashFnv32a(str: string): number {
   return hval >>> 0;
 }
 
+function checkRule(actual: string, op: string, desired: string): boolean {
+  // Numeric data
+  let actualNumeric, desiredNumeric;
+  if (actual.match(isNum) && desired.match(isNum)) {
+    actualNumeric = parseFloat(actual);
+    desiredNumeric = parseFloat(desired);
+  }
+
+  switch (op) {
+    case '=':
+      return actual === desired;
+    case '!=':
+      return actual !== desired;
+    case '>':
+      return actualNumeric !== undefined && desiredNumeric !== undefined
+        ? actualNumeric > desiredNumeric
+        : actual > desired;
+    case '<':
+      return actualNumeric !== undefined && desiredNumeric !== undefined
+        ? actualNumeric < desiredNumeric
+        : actual < desired;
+    case '~':
+      return !!actual.match(new RegExp(desired));
+    case '!~':
+      return !actual.match(new RegExp(desired));
+  }
+  if (process.env.NODE_ENV !== 'production') {
+    console.error('Unknown targeting rule operator: ', op);
+  }
+  return true;
+}
+
+function isTargeted(rules: string[]): boolean {
+  for (let i = 0; i < rules.length; i++) {
+    const parts = rules[i].split(' ', 3);
+    if (
+      !checkRule(
+        userMap.get(parts[0].trim()) || '',
+        parts[1].trim() || '',
+        parts[2].trim() || ''
+      )
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function chooseVariation(
-  uid: string | null,
   testId: string,
   weights: number[] = [0.5, 0.5]
 ): number {
-  if (!uid) {
+  if (!config.userId) {
     return -1;
   }
 
   // Hash the user id and testName to a number from 0 to 1;
-  const n = (hashFnv32a(uid + testId) % 1000) / 1000;
+  const n = (hashFnv32a(config.userId + testId) % 1000) / 1000;
 
   let cumulativeWeight = 0;
   for (let i = 0; i < weights.length; i++) {
@@ -53,49 +103,7 @@ const getQueryStringOverride = (id: string) => {
   return null;
 };
 
-const getPersistedVariations = (): { [key: string]: number } => {
-  if (typeof window === 'undefined') return {};
-  try {
-    const mapping = window.localStorage.getItem('gb_test_mapping');
-    if (!mapping) return {};
-    const decoded = JSON.parse(mapping);
-    return decoded || {};
-  } catch (e) {
-    // Ignore localstorage errors
-    return {};
-  }
-};
-const getPersistedVariation = (testId: string, uid: string) => {
-  const mapping = getPersistedVariations();
-  const k = testId + uid;
-  if (k in mapping) return mapping[k];
-  return null;
-};
-const setPersistedVariation = (
-  testId: string,
-  uid: string,
-  variation: number
-) => {
-  try {
-    window.localStorage.setItem(
-      'gb_test_mapping',
-      JSON.stringify({
-        ...getPersistedVariations(),
-        [testId + uid]: variation,
-      })
-    );
-  } catch (e) {
-    // Ignore localstorage errors
-  }
-};
-
-export type ExperimentOptions = {
-  coverage?: number;
-  variations?: number;
-  weights?: number[];
-};
-
-const getWeightsFromOptions = (options: ExperimentOptions) => {
+const getWeightsFromOptions = (options: ExperimentParams) => {
   // 2-way test by default
   let variations = options.variations || 2;
   if (variations < 2 || variations > 20) {
@@ -106,12 +114,10 @@ const getWeightsFromOptions = (options: ExperimentOptions) => {
   }
 
   // Full coverage by default
-  let coverage = options.coverage || 1;
-  if (coverage <= 0 || coverage > 1) {
+  let coverage = typeof options.coverage === 'undefined' ? 1 : options.coverage;
+  if (coverage < 0 || coverage > 1) {
     if (process.env.NODE_ENV !== 'production') {
-      console.error(
-        'Experiment coverage must be greater than 0 and less than or equal to 1'
-      );
+      console.error('Experiment coverage must be between 0 and 1 inclusive');
     }
     coverage = 1;
   }
@@ -129,86 +135,81 @@ const getWeightsFromOptions = (options: ExperimentOptions) => {
   return weights.map(n => n * coverage);
 };
 
-const experimentsTracked = new Map();
-const experiment = (
-  id: string,
-  uid: string | null,
-  options: ExperimentOptions,
-  persistLocalStorage: boolean
-): number => {
+const experimentsTracked = new Set();
+const trackView = (experiment: string, variation: number) => {
+  // Only track an experiment once per user/test
+  if (variation !== -1 && !experimentsTracked.has(config.userId + experiment)) {
+    experimentsTracked.add(config.userId + experiment);
+
+    if (typeof window !== 'undefined') {
+      const w = window as AnalyticsWindow;
+      if (config.segment) {
+        const t = w?.analytics?.track;
+        if (t) {
+          t('Experiment Viewed', {
+            experiment_id: experiment,
+            variation_id: variation,
+          });
+        }
+      }
+      if (config.ga) {
+        const g = w?.ga;
+        if (g && typeof g === 'function') {
+          g('set', `dimension${config.ga}`, experiment + ':' + variation);
+          g('send', 'event', 'experiment', experiment, variation + '');
+        }
+      }
+    }
+    if (config.onExperimentViewed) {
+      config.onExperimentViewed(experiment, variation);
+    }
+  }
+};
+
+export const experiment = (id: string, options?: ExperimentParams): number => {
   // If experiments are disabled globally
-  if (!config.enableExperiments) {
+  if (!config.enabled) {
     return -1;
   }
 
   // If querystring override is enabled
-  if (config.experimentQueryStringOverride) {
+  if (config.enableQueryStringOverride) {
     let override = getQueryStringOverride(id);
     if (override !== null) {
       return override;
     }
   }
 
-  let optionsClone = { ...options };
-
-  // If experiment settings are overridden in config
-  if (id in config.experimentConfig) {
-    // If experiment is stopped, return variation immediately
-    if ('variation' in config.experimentConfig[id]) {
-      return config.experimentConfig[id].variation || 0;
-    }
-
-    // Weights overridden
-    if (config.experimentConfig[id].weights) {
-      optionsClone.weights = config.experimentConfig[id].weights;
-    }
-    // Coverage overridden
-    if (config.experimentConfig[id].coverage) {
-      optionsClone.coverage = config.experimentConfig[id].coverage;
-    }
-  }
-
-  if (!uid) {
+  if (!config.userId) {
     return -1;
   }
 
-  if (persistLocalStorage) {
-    const existingVariation = getPersistedVariation(id, uid);
-    if (existingVariation !== null) {
-      return existingVariation;
+  // If experiment settings are overridden in config
+  if (!options) options = {};
+  let optionsClone = { ...options };
+  if (config.experiments && id in config.experiments) {
+    // Value is forced, return immediately
+    const { force, ...overrides } = config.experiments[id];
+    if (force !== undefined) {
+      return force;
     }
+    Object.assign(optionsClone, overrides);
+  }
+
+  // Experiment has targeting rules, check if user matches
+  if (optionsClone.targeting && !isTargeted(optionsClone.targeting)) {
+    return -1;
   }
 
   const weights = getWeightsFromOptions(optionsClone);
 
   // Hash unique id and experiment id to randomly choose a variation given weights
-  const variation = chooseVariation(uid, id, weights);
-
-  if (persistLocalStorage) {
-    setPersistedVariation(id, uid, variation);
-  }
-
-  // Only track an experiment once per user/test
-  if (variation !== -1 && !experimentsTracked.has(uid + id)) {
-    experimentsTracked.set(uid + id, variation);
-
-    if (config.trackExperimentOverride) {
-      config.trackExperimentOverride(id, variation);
-    } else {
-      track('viewed_experiment', {
-        experiment: id,
-        variation,
-      });
-    }
-  }
+  const variation = chooseVariation(id, weights);
+  trackView(id, variation);
 
   return variation;
 };
 
-export const experimentByUser = (id: string, options: ExperimentOptions = {}) =>
-  experiment(id, config.userId, options, false);
-
-export const experimentByDevice = (
-  id: string,
-  options: ExperimentOptions = {}
-) => experiment(id, config.anonymousId, options, true);
+export function clearExperimentsTracked() {
+  experimentsTracked.clear();
+}
