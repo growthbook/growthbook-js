@@ -1,5 +1,7 @@
 # Growth Book Javascript Library
 
+![Build Status](https://github.com/growthbook/growthbook-js/workflows/Build/badge.svg)
+
 Small utility library to run controlled experiments (i.e. AB tests). Comaptible with the Growth Book experimentation platform.
 
 ## Installation
@@ -18,9 +20,7 @@ import {configure} from '@growthbook/growthbook'
 
 configure({
     // User id of the visitor (can omit if the visitor is logged out)
-    uuid: "12345",
-    // Track an event in Segment when the user views an experiment
-    segment: true,
+    userId: "12345",
 });
 ```
 
@@ -44,14 +44,14 @@ else if(variation === -1) {
 
 ## Configuration
 
-The configure method accepts a number of options.  Everything is optional.
+The `configure` method accepts a number of additional settings.  Everything is optional and you can call `configure` more than once to overwrite specific settings.
 
 ```js
 import {configure} from '@growthbook/growthbook';
 
 configure({
     // User id of the visitor (can omit if the visitor is logged out)
-    uuid: "12345",
+    userId: "12345",
 
     // Any attributes about the user or page that you want to use for experiment targeting
     attributes: {
@@ -81,7 +81,7 @@ configure({
         }
     },
 
-    // Default false. Set to true to enable forcing variations via url
+    // Default false. Set to true to enable forcing variations via url. Very useful for QA.
     // For example: https://example.com/?my-experiment=1
     enableQueryStringOverride: false,
 
@@ -94,8 +94,8 @@ configure({
     segment: true,
 
     // Default 0. When a positive integer, sets the specified custom dimension and fires an event using window.ga
-    // The custom dimension value is in the format "experiment_id:variation_number"
-    // The event is ga("send", "event", "experiment", experiment_id, variation_number)
+    // 1st call: ga("set", "dimension"+n, `$(experiment_id}:${variation_number}`);
+    // 2nd call: ga("send", "event", "experiment", experiment_id, variation_number);
     ga: 1,
 
     // Optional callback when the user views an experiment
@@ -105,13 +105,9 @@ configure({
 });
 ```
 
-You can call `configure` as many times as you want.  All fields are optional and have sane defaults.
-
 ### Inline Experiment Configuration
 
-For most use-cases, the above configuration method works perfectly for experiments.
-
-However, in some cases, you may prefer to set experiment parameters inline when doing variation assignment:
+In some cases, you may prefer to set experiment parameters inline when doing variation assignment:
 
 ```js
 import {experiment} from '@growthbook/growthbook';

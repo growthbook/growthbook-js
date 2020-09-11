@@ -8,7 +8,7 @@ export const config: ConfigInterface = {
   enabled: true,
   experiments: {},
   onExperimentViewed: undefined,
-  uuid: undefined,
+  userId: undefined,
   ga: undefined,
   segment: false,
 };
@@ -41,17 +41,17 @@ export const configure = (c: Partial<ConfigInterface>) => {
   Object.assign(config, c);
 
   // Auto-generate
-  if (!config.uuid) {
+  if (!config.userId) {
     try {
       let anonId = window.localStorage.getItem(LOCALSTORAGE_ANONID_KEY);
       if (!anonId) {
         anonId = generateAnonymousId();
         window.localStorage.setItem(LOCALSTORAGE_ANONID_KEY, anonId);
       }
-      config.uuid = anonId;
+      config.userId = anonId;
     } catch (e) {
       // If there's a localStorage error, pick a random anonymous_id for this page view (better than nothing)
-      config.uuid = generateAnonymousId();
+      config.userId = generateAnonymousId();
     }
   }
 

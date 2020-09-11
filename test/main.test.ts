@@ -3,13 +3,13 @@ import { ExperimentParams, AnalyticsWindow } from '../src/types';
 import { clearExperimentsTracked } from '../src/experiment';
 
 const chooseVariation = (
-  uuid: string | null,
+  userId: string | null,
   test: string,
   options: ExperimentParams = {}
 ) => {
-  if (uuid) {
+  if (userId) {
     growthbook.configure({
-      uuid,
+      userId,
     });
   }
   return growthbook.experiment(test, options);
@@ -46,7 +46,7 @@ describe('experiments', () => {
       onExperimentViewed: () => {
         // Nothing
       },
-      uuid: undefined,
+      userId: undefined,
       ga: undefined,
       segment: false,
     });
@@ -102,7 +102,7 @@ describe('experiments', () => {
     expect(chooseVariation('1', 'my-test')).toEqual(1);
     expect(chooseVariation('1', 'my-test-3')).toEqual(0);
   });
-  it('missing uuid', () => {
+  it('missing userId', () => {
     expect(chooseVariation(null, 'my-test')).toBeGreaterThan(-1);
   });
   it('tracking', () => {

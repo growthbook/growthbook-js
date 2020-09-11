@@ -23,7 +23,7 @@ export interface ConfigInterface {
   enabled?: boolean;
   onExperimentViewed?: TrackExperimentFunction;
   enableQueryStringOverride?: boolean;
-  uuid?: string;
+  userId?: string;
   attributes?: UserAttributes;
   experiments?: ExperimentsConfig;
   segment?: boolean;

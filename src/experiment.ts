@@ -68,12 +68,12 @@ function chooseVariation(
   testId: string,
   weights: number[] = [0.5, 0.5]
 ): number {
-  if (!config.uuid) {
+  if (!config.userId) {
     return -1;
   }
 
   // Hash the user id and testName to a number from 0 to 1;
-  const n = (hashFnv32a(config.uuid + testId) % 1000) / 1000;
+  const n = (hashFnv32a(config.userId + testId) % 1000) / 1000;
 
   let cumulativeWeight = 0;
   for (let i = 0; i < weights.length; i++) {
@@ -138,8 +138,8 @@ const getWeightsFromOptions = (options: ExperimentParams) => {
 const experimentsTracked = new Set();
 const trackView = (experiment: string, variation: number) => {
   // Only track an experiment once per user/test
-  if (variation !== -1 && !experimentsTracked.has(config.uuid + experiment)) {
-    experimentsTracked.add(config.uuid + experiment);
+  if (variation !== -1 && !experimentsTracked.has(config.userId + experiment)) {
+    experimentsTracked.add(config.userId + experiment);
 
     if (typeof window !== 'undefined') {
       const w = window as AnalyticsWindow;
@@ -180,7 +180,7 @@ export const experiment = (id: string, options?: ExperimentParams): number => {
     }
   }
 
-  if (!config.uuid) {
+  if (!config.userId) {
     return -1;
   }
 
