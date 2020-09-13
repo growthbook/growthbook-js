@@ -12,7 +12,7 @@ const chooseVariation = (
       userId,
     });
   }
-  return growthbook.experiment(test, options);
+  return growthbook.experiment(test, options).variation;
 };
 
 // Allow mocking window.location values (e.g. for querystring variation forcing)
@@ -338,5 +338,108 @@ describe('experiments', () => {
 
     // No errors thrown, even though window.ga and window.analytics are missing
     expect(chooseVariation('2', 'my-test')).toEqual(0);
+  });
+
+  it('configData experiment', () => {
+    growthbook.configure({
+      userId: '1',
+    });
+
+    expect(
+      growthbook.experiment('my-test', {
+        configData: {
+          color: ['blue', 'green'],
+          size: ['small', 'large'],
+        },
+      })
+    ).toEqual({
+      experiment: 'my-test',
+      variation: 1,
+      data: {
+        color: 'green',
+        size: 'large',
+      },
+    });
+
+    // Fallback to control config data if not in test
+    expect(
+      growthbook.experiment('my-test', {
+        coverage: 0.01,
+        configData: {
+          color: ['blue', 'green'],
+          size: ['small', 'large'],
+        },
+      })
+    ).toEqual({
+      experiment: 'my-test',
+      variation: -1,
+      data: {
+        color: 'blue',
+        size: 'small',
+      },
+    });
+  });
+
+  it('configData lookup', () => {
+    growthbook.configure({
+      userId: '1',
+      experiments: {
+        'button-color-size-chrome': {
+          targeting: ['browser = chrome'],
+          configData: {
+            'button.color': ['blue', 'green'],
+            'button.size': ['small', 'large'],
+          },
+        },
+        'button-color-safari': {
+          targeting: ['browser = safari'],
+          configData: {
+            'button.color': ['blue', 'green'],
+          },
+        },
+      },
+    });
+
+    // No matches
+    expect(growthbook.getConfigFromExperiments('button.unknown')).toEqual({
+      experiment: undefined,
+      variation: undefined,
+      value: undefined,
+    });
+
+    // First matching experiment
+    growthbook.configure({
+      attributes: { browser: 'chrome' },
+    });
+    expect(growthbook.getConfigFromExperiments('button.color')).toEqual({
+      experiment: 'button-color-size-chrome',
+      variation: 0,
+      value: 'blue',
+    });
+    expect(growthbook.getConfigFromExperiments('button.size')).toEqual({
+      experiment: 'button-color-size-chrome',
+      variation: 0,
+      value: 'small',
+    });
+
+    // Fallback experiment
+    growthbook.configure({
+      attributes: { browser: 'safari' },
+    });
+    expect(growthbook.getConfigFromExperiments('button.color')).toEqual({
+      experiment: 'button-color-safari',
+      variation: 0,
+      value: 'blue',
+    });
+
+    // Fallback undefined
+    growthbook.configure({
+      attributes: { browser: 'safari' },
+    });
+    expect(growthbook.getConfigFromExperiments('button.size')).toEqual({
+      experiment: undefined,
+      variation: undefined,
+      value: undefined,
+    });
   });
 });

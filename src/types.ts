@@ -2,11 +2,30 @@ export interface UserAttributes {
   [key: string]: any;
 }
 
+export interface ConfigData {
+  [key: string]: string[];
+}
+
+export interface ExperimentReturnData {
+  experiment: string;
+  variation: number;
+  data: {
+    [key: string]: string;
+  };
+}
+
+export interface ConfigReturnData {
+  experiment?: string;
+  variation?: number;
+  value?: string;
+}
+
 export interface ExperimentParams {
   variations?: number;
   weights?: number[];
   coverage?: number;
   targeting?: string[];
+  configData?: ConfigData;
   force?: number;
 }
 

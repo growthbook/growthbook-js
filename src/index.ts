@@ -1,7 +1,8 @@
 import { configure } from './config';
-import { experiment } from './experiment';
+import { experiment, getConfigFromExperiments } from './experiment';
 
 export default {
   configure,
   experiment,
+  getConfigFromExperiments,
 };

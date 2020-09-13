@@ -29,7 +29,7 @@ Then, put the user in an experiment
 import {experiment} from '@growthbook/growthbook'
 
 // Simple 50/50 split test by default
-const variation = experiment('my-unique-experiment-key');
+const {variation} = experiment('my-unique-experiment-key');
 
 if(variation === 0) {
     console.log('Control');
@@ -73,10 +73,14 @@ configure({
             targeting: [
                 "accountAge < 40",
                 "premium = true"
-            ]
+            ],
+            // Config data for the variations. Used to tie into configuration or feature-flag systems
+            configData: {
+                color: ["blue","green","red"]
+            }
         },
         "my-other-experiment": {
-            // Force a specific version of the experiment to all users
+            // Force a specific version of the experiment to all users and disable tracking
             force: 0
         }
     },
@@ -90,7 +94,7 @@ configure({
     enabled: true,
 
     // Default false. When true, calls `analytics.track` when an experiment is viewed
-    // Example call: analytics.track("Experiment Viewed", {experiment_id, variation_id})
+    // Example call: analytics.track("Experiment Viewed", {experiment_id, variation_id, ...configData})
     segment: true,
 
     // Default 0. When a positive integer, sets the specified custom dimension and fires an event using window.ga
@@ -99,8 +103,8 @@ configure({
     ga: 1,
 
     // Optional callback when the user views an experiment
-    onExperimentViewed: (experiment, variation) => {
-        console.log(experiment, variation);
+    onExperimentViewed: (experiment, variation, configData) => {
+        console.log(experiment, variation, configData);
     }
 });
 ```
@@ -112,7 +116,7 @@ In some cases, you may prefer to set experiment parameters inline when doing var
 ```js
 import {experiment} from '@growthbook/growthbook';
 
-const variation = experiment("my-experiment-id", {
+const {variation} = experiment("my-experiment-id", {
     // Same experiment options as configure are available
     variations: 3,
     coverage: 0.5,
@@ -120,3 +124,72 @@ const variation = experiment("my-experiment-id", {
     targeting: ["source != google"]
 });
 ```
+
+## Experiments with Config Data
+
+Instead of using a variation number to fork your code with if/else statements, you can use config data.
+
+```js
+import {experiment} from '@growthbook/growthbook';
+
+const {data} = experiment("my-id", {
+    configData: {
+        color: ["blue","green"]
+    }
+});
+
+// Will be either "blue" or "green"
+console.log(data.color);
+```
+
+### Integrating with Configuration / Feature Flag Systems
+
+If you already have an existing configuration or feature flag system, you can do a deeper integration that 
+avoids `experiment` calls throughout your code base entirely.
+
+Simply use your existing system throughout your codebase to get config values or feature flags:
+
+```js
+// However you normally get config data
+const color = getConfig("homepage.cta.color");
+```
+
+Then, configure your experiments with the config keys they override
+```js
+import {configure} from '@growthbook/growthbook';
+
+configure({
+    experiments: {
+        "my-id": {
+            configData: {
+                "homepage.cta.color": ["blue","green"]
+            }
+        }
+    }
+});
+```
+
+Finally, modify your existing config system to get experiment overrides before falling back to your normal config lookup:
+
+```js
+import {getConfigFromExperiments} from '@growthbook/growthbook';
+
+// Your existing function
+export function getConfig(key) {
+    // value will either be undefined or come from a chosen variation
+    const {value} = getConfigFromExperiments(key);
+    if(value) {
+        return value;
+    }
+
+    // Continue with your regular configuration lookup
+    ...
+}
+```
+
+This works under the hood as follows:
+
+1.  Loop through all experiments using stable ordering
+2.  If an experiment includes the configData key, choose a variation for the user
+3.  If the chosen variation is `>=0` (passed targeting and coverage rules), break out of the loop and return the configData value
+4.  If we reach the end of the loop with no matches, return `undefined`

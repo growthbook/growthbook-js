@@ -1,5 +1,11 @@
 import { config, userMap } from './config';
-import { ExperimentParams, AnalyticsWindow } from 'types';
+import {
+  ExperimentParams,
+  AnalyticsWindow,
+  ConfigData,
+  ExperimentReturnData,
+  ConfigReturnData,
+} from 'types';
 
 const isNum = /^[-]?[0-9]*(\.[0-9]*)?$/;
 
@@ -166,22 +172,62 @@ const trackView = (experiment: string, variation: number) => {
   }
 };
 
-export const experiment = (id: string, options?: ExperimentParams): number => {
+const getConfigData = (
+  id: string,
+  inlineOptions?: ExperimentParams
+): ConfigData => {
+  if (config.experiments && id in config.experiments) {
+    const override = config.experiments[id].configData;
+    if (override) {
+      return override;
+    }
+  }
+
+  if (inlineOptions && inlineOptions.configData) {
+    return inlineOptions.configData;
+  }
+
+  return {};
+};
+
+const getReturnData = (
+  id: string,
+  variation: number,
+  inlineOptions?: ExperimentParams
+): ExperimentReturnData => {
+  const configData = getConfigData(id, inlineOptions);
+
+  const data: { [key: string]: string } = {};
+  Object.keys(configData).forEach(k => {
+    data[k] = configData[k][variation] || configData[k][0];
+  });
+
+  return {
+    experiment: id,
+    variation,
+    data,
+  };
+};
+
+export const experiment = (
+  id: string,
+  options?: ExperimentParams
+): ExperimentReturnData => {
   // If experiments are disabled globally
   if (!config.enabled) {
-    return -1;
+    return getReturnData(id, -1, options);
   }
 
   // If querystring override is enabled
   if (config.enableQueryStringOverride) {
     let override = getQueryStringOverride(id);
     if (override !== null) {
-      return override;
+      return getReturnData(id, override, options);
     }
   }
 
   if (!config.userId) {
-    return -1;
+    return getReturnData(id, -1, options);
   }
 
   // If experiment settings are overridden in config
@@ -191,14 +237,14 @@ export const experiment = (id: string, options?: ExperimentParams): number => {
     // Value is forced, return immediately
     const { force, ...overrides } = config.experiments[id];
     if (force !== undefined) {
-      return force;
+      return getReturnData(id, force, options);
     }
     Object.assign(optionsClone, overrides);
   }
 
   // Experiment has targeting rules, check if user matches
   if (optionsClone.targeting && !isTargeted(optionsClone.targeting)) {
-    return -1;
+    return getReturnData(id, -1, options);
   }
 
   const weights = getWeightsFromOptions(optionsClone);
@@ -207,9 +253,36 @@ export const experiment = (id: string, options?: ExperimentParams): number => {
   const variation = chooseVariation(id, weights);
   trackView(id, variation);
 
-  return variation;
+  return getReturnData(id, variation, options);
 };
 
 export function clearExperimentsTracked() {
   experimentsTracked.clear();
+}
+
+export function getConfigFromExperiments(key: string): ConfigReturnData {
+  if (config.experiments) {
+    const ids = Object.keys(config.experiments);
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      const exp = config.experiments[id];
+
+      if (exp.configData && exp.configData[key]) {
+        const ret = experiment(id);
+        if (ret.variation >= 0) {
+          return {
+            experiment: id,
+            variation: ret.variation,
+            value: ret.data[key],
+          };
+        }
+      }
+    }
+  }
+
+  return {
+    experiment: undefined,
+    variation: undefined,
+    value: undefined,
+  };
 }
