@@ -50,7 +50,6 @@ export interface ClientConfigInterface {
   enabled?: boolean;
   onExperimentViewed?: TrackExperimentFunction;
   enableQueryStringOverride?: boolean;
-  experiments?: ExperimentsConfig;
   segment?: boolean;
   ga?: number;
 }

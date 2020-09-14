@@ -79,12 +79,9 @@ export default class GrowthBookUser {
     // If experiment settings are overridden in config
     if (!options) options = {};
     let optionsClone = { ...options };
-    if (
-      this.client.config.experiments &&
-      id in this.client.config.experiments
-    ) {
+    if (this.client.experiments && id in this.client.experiments) {
       // Value is forced, return immediately
-      const { force, ...overrides } = this.client.config.experiments[id];
+      const { force, ...overrides } = this.client.experiments[id];
       if (force !== undefined) {
         return {
           experiment: id,
@@ -115,11 +112,11 @@ export default class GrowthBookUser {
   }
 
   lookupByDataKey(key: string): DataLookupResults {
-    if (this.client.config.experiments) {
-      const ids = Object.keys(this.client.config.experiments);
+    if (this.client.experiments) {
+      const ids = Object.keys(this.client.experiments);
       for (let i = 0; i < ids.length; i++) {
         const id = ids[i];
-        const exp = this.client.config.experiments[id];
+        const exp = this.client.experiments[id];
 
         if (exp.data && exp.data[key]) {
           const ret = this.experiment(id);
@@ -148,11 +145,8 @@ export default class GrowthBookUser {
   ): VariationData {
     let data: ExperimentData = {};
 
-    if (
-      this.client.config.experiments &&
-      experiment in this.client.config.experiments
-    ) {
-      const override = this.client.config.experiments[experiment].data;
+    if (this.client.experiments && experiment in this.client.experiments) {
+      const override = this.client.experiments[experiment].data;
       if (override) {
         data = override;
       }

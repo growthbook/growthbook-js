@@ -4,6 +4,7 @@ import {
   AnalyticsWindow,
   UserAttributes,
 } from '../src/types';
+import fetchMock from 'jest-fetch-mock';
 
 const client = new GrowthBookClient();
 
@@ -43,13 +44,13 @@ describe('experiments', () => {
     client.configure({
       enableQueryStringOverride: false,
       enabled: true,
-      experiments: {},
       onExperimentViewed: () => {
         // Nothing
       },
       ga: undefined,
       segment: undefined,
     });
+    client.setExperimentConfigs({});
     window.location.search = '';
   });
 
@@ -144,45 +145,37 @@ describe('experiments', () => {
     expect(chooseVariation('6', 'forced-test')).toEqual(0);
 
     const mock = mockCallback();
-    client.configure({
-      experiments: {
-        'forced-test': { force: 1 },
-      },
+    client.setExperimentConfigs({
+      'forced-test': { force: 1 },
     });
     expect(chooseVariation('6', 'forced-test')).toEqual(1);
     expect(mock.calls.length).toEqual(0);
   });
 
   it('override weights', () => {
-    client.configure({
-      experiments: {
-        'my-test': { weights: [0.1, 0.9] },
-      },
+    client.setExperimentConfigs({
+      'my-test': { weights: [0.1, 0.9] },
     });
     expect(chooseVariation('2', 'my-test')).toEqual(1);
   });
 
   it('override coverage', () => {
-    client.configure({
-      experiments: {
-        'my-test': { coverage: 0.4 },
-      },
+    client.setExperimentConfigs({
+      'my-test': { coverage: 0.4 },
     });
     expect(chooseVariation('1', 'my-test')).toEqual(-1);
   });
 
   it('targeting', () => {
-    client.configure({
-      experiments: {
-        'my-test': {
-          targeting: [
-            'member = true',
-            'age > 18',
-            'source ~ (google|yahoo)',
-            'name != matt',
-            'email !~ ^.*@exclude.com$',
-          ],
-        },
+    client.setExperimentConfigs({
+      'my-test': {
+        targeting: [
+          'member = true',
+          'age > 18',
+          'source ~ (google|yahoo)',
+          'name != matt',
+          'email !~ ^.*@exclude.com$',
+        ],
       },
     });
 
@@ -401,21 +394,77 @@ describe('experiments', () => {
     });
   });
 
-  it('configData lookup', () => {
-    client.configure({
-      experiments: {
-        'button-color-size-chrome': {
-          targeting: ['browser = chrome'],
-          data: {
-            'button.color': ['blue', 'green'],
-            'button.size': ['small', 'large'],
+  it('pull configs from api', async () => {
+    fetchMock.enableMocks();
+    fetchMock.mockResponse(
+      JSON.stringify({
+        status: 200,
+        experiments: {
+          'my-test': {
+            variations: 3,
           },
         },
-        'button-color-safari': {
-          targeting: ['browser = safari'],
-          data: {
-            'button.color': ['blue', 'green'],
-          },
+      })
+    );
+
+    await client.pullExperimentConfigs('12345');
+
+    expect(client.experiments).toEqual({
+      'my-test': {
+        variations: 3,
+      },
+    });
+  });
+
+  it('pull configs from api 403', async () => {
+    fetchMock.enableMocks();
+    fetchMock.mockResponseOnce(
+      JSON.stringify({
+        status: 403,
+        message: 'Invalid API key',
+      })
+    );
+
+    await client.pullExperimentConfigs('12345');
+
+    expect(client.experiments).toEqual({});
+  });
+
+  it('pull configs from api network error', async () => {
+    fetchMock.enableMocks();
+    const error = new Error('Network error');
+    fetchMock.mockRejectOnce(error);
+
+    // Mock console.error
+    const origError = console.error;
+    const consoleErrors: any[] = [];
+    console.error = (...args: any[]) => {
+      consoleErrors.push(args);
+    };
+
+    await client.pullExperimentConfigs('12345');
+
+    // Restore original console.error
+    console.error = origError;
+
+    expect(client.experiments).toEqual({});
+    expect(consoleErrors.length).toEqual(1);
+    expect(consoleErrors[0][0]).toEqual(error);
+  });
+
+  it('configData lookup', () => {
+    client.setExperimentConfigs({
+      'button-color-size-chrome': {
+        targeting: ['browser = chrome'],
+        data: {
+          'button.color': ['blue', 'green'],
+          'button.size': ['small', 'large'],
+        },
+      },
+      'button-color-safari': {
+        targeting: ['browser = safari'],
+        data: {
+          'button.color': ['blue', 'green'],
         },
       },
     });

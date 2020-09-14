@@ -36,7 +36,7 @@ else if(variation === -1) {
 }
 ```
 
-## Configuration
+## Client Configuration
 
 When creating the GrowthBookClient instance, you can pass in configuration options.
 
@@ -44,31 +44,6 @@ When creating the GrowthBookClient instance, you can pass in configuration optio
 import GrowthBookClient from '@growthbook/growthbook';
 
 const client = new GrowthBookClient({
-    // Customize experiment options beyond simple 50/50 split tests
-    experiments: {
-        "my-unique-experiment-key": {
-            // Number of variations
-            variations: 3,
-            // Include 80% of visitors in the test
-            coverage: 0.8,
-            // 50% in control, 25% in each variation (total must add up to 1)
-            weights: [0.5, 0.25, 0.25],
-            // Targeting rules. Users must meet all conditions to be included
-            targeting: [
-                "accountAge < 40",
-                "premium = true"
-            ],
-            // Config data for the variations. Used to tie into configuration or feature-flag systems
-            data: {
-                color: ["blue","green","red"]
-            }
-        },
-        "my-other-experiment": {
-            // Force a specific version of the experiment to all users and disable tracking
-            force: 0
-        }
-    },
-
     // Default false. Set to true to enable forcing variations via url. Very useful for QA.
     // For example: https://example.com/?my-experiment=1
     enableQueryStringOverride: false,
@@ -101,12 +76,12 @@ client.configure({
 });
 ```
 
-### User attributes
+## User Configuration
 
-The `client.user` method takes an optional 2nd argument with user attributes.
+The `client.user` method takes an optional 2nd argument with user attributes.  These attributes are never sent across the network and are only used to locally evaluate experiment targeting rules.
 
 ```js
-const user = client.user({
+const user = client.user("12345", {
     // Any attributes about the user or page that you want to use for experiment targeting
     premium: true,
     accountAge: 36,
@@ -123,7 +98,37 @@ user.setAttributes({
 })
 ```
 
-### Inline Experiment Configuration
+## Experiment Configuration
+
+The default test is a 50/50 split with no targeting or customization.  There are a few ways to configure this on a test-by-test basis.
+
+### Option 1: Auto-Pull from Growth Book API (Browser only)
+
+This uses `window.fetch` to pull your latest experiment configs from the growthbook API.
+
+```js
+await client.pullExperimentConfigs("growthbook-api-key");
+```
+
+### Option 2: Manually Fetch Configs (NodeJS)
+
+NodeJS environments are much more varied than browsers, so Growth Book does not ship a built-in solution.  However, 
+it's very simple to create your own custom solution.  For example:
+
+```js
+const fetch = require('node-fetch');
+
+const API_KEY = "growthbook-api-key";
+fetch(`https://api.growthbook.io/config/${API_KEY}`)
+    .then(res => res.json)
+    .then(json => {
+        client.setExperimentConfigs(json.experiments);
+    })
+```
+
+Our API is behind a global CDN, so it's very fast and reliable.  However, we do still recommend adding a persistent caching layer (redis, DynamoDB, etc.) if possible.
+
+### Option 3: Inline Experiment Configuration
 
 In some cases, you may prefer to set experiment parameters inline when doing variation assignment:
 
@@ -137,9 +142,9 @@ const {variation} = user.experiment("my-experiment-id", {
 });
 ```
 
-## Experiments with Config Data
+## Variation Data
 
-Instead of using a variation number to fork your code with if/else statements, you can use config data.
+Instead of using a variation number to fork your code with if/else statements, you can use variation data.
 
 ```js
 const {data} = user.experiment("my-id", {
@@ -157,21 +162,7 @@ console.log(data.color);
 If you already have an existing configuration or feature flag system, you can do a deeper integration that 
 avoids `experiment` calls throughout your code base entirely.
 
-For this to work, you'll need to configure all possible experiments in the client:
-```js
-client.configure({
-    experiments: {
-        "my-id": {
-            data: {
-                "homepage.cta.color": ["blue","green"]
-            }
-        },
-        ...
-    }
-})
-```
-
-Then, modify your existing config system to get experiment overrides before falling back to your normal config lookup:
+All you need to do is modify your existing config system to get experiment overrides before falling back to your normal config lookup:
 
 ```js
 // Your existing function
@@ -186,8 +177,6 @@ export function getConfig(key) {
     ...
 }
 ```
-
-Now, calling `getConfig("homepage.cta.color")` will use your experiment.
 
 This works under the hood as follows:
 
