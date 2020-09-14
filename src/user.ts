@@ -92,6 +92,11 @@ export default class GrowthBookUser {
       Object.assign(optionsClone, overrides);
     }
 
+    // Require the number of variations to be set
+    if(!optionsClone.variations) {
+      return notInTest;
+    }
+
     // Experiment has targeting rules, check if user matches
     if (optionsClone.targeting && !this.isTargeted(optionsClone.targeting)) {
       return notInTest;

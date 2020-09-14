@@ -22,8 +22,8 @@ const client = new GrowthBookClient();
 // User id of the visitor being experimented on
 const user = client.user("12345");
 
-// Simple 50/50 split test by default
-const {variation} = user.experiment("my-experiment-key");
+// Simple 50/50 split test
+const {variation} = user.experiment("experiment-id", {variations: 2});
 
 if(variation === 0) {
     console.log('Control');
@@ -68,7 +68,7 @@ const client = new GrowthBookClient({
 });
 ```
 
-You can set new options at any point by calling the `client.configure` method:
+You can set new options at any point by calling the `client.configure` method. These are shallowly merged with existing options.
 
 ```js
 client.configure({
@@ -134,11 +134,19 @@ In some cases, you may prefer to set experiment parameters inline when doing var
 
 ```js
 const {variation} = user.experiment("my-experiment-id", {
-    // Same experiment options as client.configure.experiments
+    // Number of variations (including the control)
     variations: 3,
+    // Percent of traffic to include in the test (from 0 to 1)
     coverage: 0.5,
+    // How to split traffic between variations (must add to 1)
     weights: [0.34, 0.33, 0.33],
-    targeting: ["source != google"]
+    // Targeting rules
+    // Evaluated against user attributes to determine who is included in the test
+    targeting: ["source != google"],
+    // Add arbitrary data to the variations (see below for more info)
+    data: {
+        color: ["blue","green","red"]
+    }
 });
 ```
 
@@ -162,21 +170,24 @@ console.log(data.color);
 If you already have an existing configuration or feature flag system, you can do a deeper integration that 
 avoids `experiment` calls throughout your code base entirely.
 
-All you need to do is modify your existing config system to get experiment overrides before falling back to your normal config lookup:
+All you need to do is modify your existing config system to get experiment overrides before falling back to your normal lookup process:
 
 ```js
 // Your existing function
 export function getConfig(key) {
-    // value will either be undefined or come from a chosen variation
+    // Look for a valid matching experiment. 
+    // If found, choose a variation and return the value for the requested key
     const {value} = user.lookupByDataKey(key);
     if(value) {
         return value;
     }
 
-    // Continue with your regular configuration lookup
+    // Continue with your normal lookup process
     ...
 }
 ```
+
+Instead of generic keys like `color`, you probably want to be more descriptive with this approach (e.g. `homepage.cta.color`).
 
 This works under the hood as follows:
 
