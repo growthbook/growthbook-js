@@ -1,8 +1,3 @@
-import { configure } from './config';
-import { experiment, getConfigFromExperiments } from './experiment';
+import GrowthBookClient from './client';
 
-export default {
-  configure,
-  experiment,
-  getConfigFromExperiments,
-};
+export default GrowthBookClient;

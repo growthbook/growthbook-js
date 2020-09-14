@@ -1,23 +1,24 @@
 export interface UserAttributes {
-  [key: string]: any;
+  [key: string]: unknown;
+}
+export interface ExperimentData {
+  [key: string]: unknown[];
+}
+export interface VariationData {
+  [key: string]: unknown;
 }
 
-export interface ConfigData {
-  [key: string]: string[];
-}
-
-export interface ExperimentReturnData {
+export interface ExperimentResults {
   experiment: string;
   variation: number;
-  data: {
-    [key: string]: string;
-  };
+  data: VariationData;
 }
 
-export interface ConfigReturnData {
+export interface DataLookupResults {
   experiment?: string;
   variation?: number;
-  value?: string;
+  value?: unknown;
+  data?: VariationData;
 }
 
 export interface ExperimentParams {
@@ -25,7 +26,7 @@ export interface ExperimentParams {
   weights?: number[];
   coverage?: number;
   targeting?: string[];
-  configData?: ConfigData;
+  data?: ExperimentData;
   force?: number;
 }
 
@@ -33,18 +34,22 @@ export interface ExperimentsConfig {
   [key: string]: ExperimentParams;
 }
 
+export type TrackExperimentFunctionProps = {
+  experiment: string;
+  variation: number;
+  userId: string;
+  data?: VariationData;
+  userAttributes?: UserAttributes;
+};
+
 export type TrackExperimentFunction = (
-  experiment: string,
-  variation: number
+  info: TrackExperimentFunctionProps
 ) => void;
 
-export interface ConfigInterface {
+export interface ClientConfigInterface {
   enabled?: boolean;
   onExperimentViewed?: TrackExperimentFunction;
   enableQueryStringOverride?: boolean;
-  userId?: string;
-  attributes?: UserAttributes;
-  experiments?: ExperimentsConfig;
   segment?: boolean;
   ga?: number;
 }
