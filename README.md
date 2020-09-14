@@ -102,7 +102,7 @@ it's very simple to create your own custom solution.  For example:
 const fetch = require('node-fetch');
 
 const API_KEY = "growthbook-api-key";
-fetch(`https://api.growthbook.io/config/${API_KEY}`)
+fetch(`https://cdn.growthbook.io/config/${API_KEY}`)
     .then(res => res.json())
     .then(json => {
         client.setExperimentConfigs(json.experiments);

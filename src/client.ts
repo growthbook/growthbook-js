@@ -31,7 +31,7 @@ export default class GrowthBookClient {
       return false;
     }
     try {
-      const res = await fetch(`https://api.growthbook.io/config/${apiKey}`);
+      const res = await fetch(`https://cdn.growthbook.io/config/${apiKey}`);
       if (res.ok) {
         const json = await res.json();
         if (json.status === 200 && json.experiments) {
