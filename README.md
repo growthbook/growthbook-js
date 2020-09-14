@@ -150,22 +150,54 @@ const {variation} = user.experiment("my-experiment-id", {
 });
 ```
 
-## Variation Data
+## Running Experiments
 
-Instead of using a variation number to fork your code with if/else statements, you can use variation data.
+Growth Book supports 3 different implementation approaches:
+
+1.  Branching
+2.  Parameterization
+3.  Config System
+
+### Approach 1: Branching
+
+This is the simplest to understand and implement. You add branching via if/else or switch statements:
 
 ```js
-const {data} = user.experiment("my-id", {
-    data: {
-        color: ["blue","green"]
-    }
-});
+const {variation} = user.experiment("experiment-id");
 
-// Will be either "blue" or "green"
-console.log(data.color);
+if(variation === 1) {
+    // Variation
+    button.color = "green";
+}
+else {
+    // Control
+    button.color = "blue";
+}
 ```
 
-### Integrating with Configuration / Feature Flag Systems
+## Approach 2: Parameterization
+
+With this approach, you parameterize the variations by associating them with data.
+
+With the following experiment definition:
+```json
+{
+    "variations": 2,
+    "data": {
+        "color": ["blue", "green"]
+    }
+}
+```
+
+You can now implement the test like this instead:
+```js
+const {data} = user.experiment("experiment-id");
+
+// Will be either "blue" or "green"
+button.color = data.color;
+```
+
+### Approach 3: Configuration System
 
 If you already have an existing configuration or feature flag system, you can do a deeper integration that 
 avoids `experiment` calls throughout your code base entirely.
@@ -189,9 +221,20 @@ export function getConfig(key) {
 
 Instead of generic keys like `color`, you probably want to be more descriptive with this approach (e.g. `homepage.cta.color`).
 
-This works under the hood as follows:
+With the following experiment definitions:
+```json
+{
+    "variations": 2,
+    "data": {
+        "homepage.cta.color": ["blue", "green"]
+    }
+}
+```
 
-1.  Loop through all experiments using stable ordering
-2.  If an experiment includes the data key, choose a variation for the user
-3.  If the chosen variation is `>=0` (passed targeting and coverage rules), break out of the loop and return the data value for the key
-4.  If we reach the end of the loop with no matches, return `undefined`
+You can now do:
+
+```js
+button.color = getConfig("homepage.cta.color");
+```
+
+Your code now no longer cares where the value comes from. It could be a hard-coded config value or part of an experiment.  This is the cleanest approach of the 3, but it can be difficult to debug if things go wrong.
