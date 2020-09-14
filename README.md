@@ -103,7 +103,7 @@ const fetch = require('node-fetch');
 
 const API_KEY = "growthbook-api-key";
 fetch(`https://api.growthbook.io/config/${API_KEY}`)
-    .then(res => res.json)
+    .then(res => res.json())
     .then(json => {
         client.setExperimentConfigs(json.experiments);
     })
@@ -158,7 +158,7 @@ else {
 }
 ```
 
-## Approach 2: Parameterization
+### Approach 2: Parameterization
 
 With this approach, you parameterize the variations by associating them with data.
 
