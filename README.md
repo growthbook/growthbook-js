@@ -114,7 +114,8 @@ const user = client.user({
 });
 ```
 
-You can update these at any time by calling `user.setAttributes`. By default, this does a shallow merge with existing attributes. To completely overwrite instead, pass `true` as the 2nd argument.
+You can update these at any time by calling `user.setAttributes`. By default, this completely overwrites all previous attributes. To do a 
+shallow merge instead, pass `true` as the 2nd argument.
 
 ```js
 user.setAttributes({
@@ -170,14 +171,7 @@ client.configure({
 })
 ```
 
-Simply use your existing system throughout your codebase to get config values or feature flags:
-
-```js
-// However you normally get config data
-const color = getConfig("homepage.cta.color");
-```
-
-Finally, modify your existing config system to get experiment overrides before falling back to your normal config lookup:
+Then, modify your existing config system to get experiment overrides before falling back to your normal config lookup:
 
 ```js
 // Your existing function
@@ -192,6 +186,8 @@ export function getConfig(key) {
     ...
 }
 ```
+
+Now, calling `getConfig("homepage.cta.color")` will use your experiment.
 
 This works under the hood as follows:
 
