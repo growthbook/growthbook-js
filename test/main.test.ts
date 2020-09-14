@@ -55,16 +55,16 @@ describe('experiments', () => {
   });
 
   it('missing variations', () => {
-    expect(chooseVariation("1","my-test")).toEqual(-1);
+    expect(chooseVariation('1', 'my-test')).toEqual(-1);
 
     client.setExperimentConfigs({
-      "my-test": {
-        variations: 2
-      }
+      'my-test': {
+        variations: 2,
+      },
     });
 
-    expect(chooseVariation("1", "my-test")).toEqual(1);
-  })
+    expect(chooseVariation('1', 'my-test')).toEqual(1);
+  });
 
   it('defaultWeights', () => {
     expect(chooseVariation('1', 'my-test', { variations: 2 })).toEqual(1);
@@ -78,26 +78,62 @@ describe('experiments', () => {
     expect(chooseVariation('9', 'my-test', { variations: 2 })).toEqual(0);
   });
   it('unevenWeights', () => {
-    expect(chooseVariation('1', 'my-test', { variations: 2, weights: [0.1, 0.9] })).toEqual(1);
-    expect(chooseVariation('2', 'my-test', { variations: 2, weights: [0.1, 0.9] })).toEqual(1);
-    expect(chooseVariation('3', 'my-test', { variations: 2, weights: [0.1, 0.9] })).toEqual(0);
-    expect(chooseVariation('4', 'my-test', { variations: 2, weights: [0.1, 0.9] })).toEqual(1);
-    expect(chooseVariation('5', 'my-test', { variations: 2, weights: [0.1, 0.9] })).toEqual(1);
-    expect(chooseVariation('6', 'my-test', { variations: 2, weights: [0.1, 0.9] })).toEqual(1);
-    expect(chooseVariation('7', 'my-test', { variations: 2, weights: [0.1, 0.9] })).toEqual(0);
-    expect(chooseVariation('8', 'my-test', { variations: 2, weights: [0.1, 0.9] })).toEqual(1);
-    expect(chooseVariation('9', 'my-test', { variations: 2, weights: [0.1, 0.9] })).toEqual(1);
+    expect(
+      chooseVariation('1', 'my-test', { variations: 2, weights: [0.1, 0.9] })
+    ).toEqual(1);
+    expect(
+      chooseVariation('2', 'my-test', { variations: 2, weights: [0.1, 0.9] })
+    ).toEqual(1);
+    expect(
+      chooseVariation('3', 'my-test', { variations: 2, weights: [0.1, 0.9] })
+    ).toEqual(0);
+    expect(
+      chooseVariation('4', 'my-test', { variations: 2, weights: [0.1, 0.9] })
+    ).toEqual(1);
+    expect(
+      chooseVariation('5', 'my-test', { variations: 2, weights: [0.1, 0.9] })
+    ).toEqual(1);
+    expect(
+      chooseVariation('6', 'my-test', { variations: 2, weights: [0.1, 0.9] })
+    ).toEqual(1);
+    expect(
+      chooseVariation('7', 'my-test', { variations: 2, weights: [0.1, 0.9] })
+    ).toEqual(0);
+    expect(
+      chooseVariation('8', 'my-test', { variations: 2, weights: [0.1, 0.9] })
+    ).toEqual(1);
+    expect(
+      chooseVariation('9', 'my-test', { variations: 2, weights: [0.1, 0.9] })
+    ).toEqual(1);
   });
   it('coverage', () => {
-    expect(chooseVariation('1', 'my-test', { variations: 2, coverage: 0.4 })).toEqual(-1);
-    expect(chooseVariation('2', 'my-test', { variations: 2, coverage: 0.4 })).toEqual(0);
-    expect(chooseVariation('3', 'my-test', { variations: 2, coverage: 0.4 })).toEqual(0);
-    expect(chooseVariation('4', 'my-test', { variations: 2, coverage: 0.4 })).toEqual(-1);
-    expect(chooseVariation('5', 'my-test', { variations: 2, coverage: 0.4 })).toEqual(-1);
-    expect(chooseVariation('6', 'my-test', { variations: 2, coverage: 0.4 })).toEqual(-1);
-    expect(chooseVariation('7', 'my-test', { variations: 2, coverage: 0.4 })).toEqual(0);
-    expect(chooseVariation('8', 'my-test', { variations: 2, coverage: 0.4 })).toEqual(-1);
-    expect(chooseVariation('9', 'my-test', { variations: 2, coverage: 0.4 })).toEqual(1);
+    expect(
+      chooseVariation('1', 'my-test', { variations: 2, coverage: 0.4 })
+    ).toEqual(-1);
+    expect(
+      chooseVariation('2', 'my-test', { variations: 2, coverage: 0.4 })
+    ).toEqual(0);
+    expect(
+      chooseVariation('3', 'my-test', { variations: 2, coverage: 0.4 })
+    ).toEqual(0);
+    expect(
+      chooseVariation('4', 'my-test', { variations: 2, coverage: 0.4 })
+    ).toEqual(-1);
+    expect(
+      chooseVariation('5', 'my-test', { variations: 2, coverage: 0.4 })
+    ).toEqual(-1);
+    expect(
+      chooseVariation('6', 'my-test', { variations: 2, coverage: 0.4 })
+    ).toEqual(-1);
+    expect(
+      chooseVariation('7', 'my-test', { variations: 2, coverage: 0.4 })
+    ).toEqual(0);
+    expect(
+      chooseVariation('8', 'my-test', { variations: 2, coverage: 0.4 })
+    ).toEqual(-1);
+    expect(
+      chooseVariation('9', 'my-test', { variations: 2, coverage: 0.4 })
+    ).toEqual(1);
   });
   it('threeWayTest', () => {
     expect(chooseVariation('1', 'my-test', { variations: 3 })).toEqual(2);
@@ -289,20 +325,26 @@ describe('experiments', () => {
       enabled: false,
     });
 
-    expect(chooseVariation('1', 'disabled-test', { variations: 2 })).toEqual(-1);
+    expect(chooseVariation('1', 'disabled-test', { variations: 2 })).toEqual(
+      -1
+    );
     expect(mock.calls.length).toEqual(0);
   });
 
   it('querystring force', () => {
     window.location.search = '?forced-test-qs=1';
 
-    expect(chooseVariation('1', 'forced-test-qs', { variations: 2 })).toEqual(0);
+    expect(chooseVariation('1', 'forced-test-qs', { variations: 2 })).toEqual(
+      0
+    );
 
     client.configure({
       enableQueryStringOverride: true,
     });
 
-    expect(chooseVariation('1', 'forced-test-qs', { variations: 2 })).toEqual(1);
+    expect(chooseVariation('1', 'forced-test-qs', { variations: 2 })).toEqual(
+      1
+    );
   });
 
   it('querystring force disabled tracking', () => {
@@ -312,7 +354,9 @@ describe('experiments', () => {
     });
 
     window.location.search = '?forced-test-qs=1';
-    expect(chooseVariation('1', 'forced-test-qs', { variations: 2 })).toEqual(1);
+    expect(chooseVariation('1', 'forced-test-qs', { variations: 2 })).toEqual(
+      1
+    );
 
     expect(mock.calls.length).toEqual(0);
   });

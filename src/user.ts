@@ -93,7 +93,7 @@ export default class GrowthBookUser {
     }
 
     // Require the number of variations to be set
-    if(!optionsClone.variations) {
+    if (!optionsClone.variations) {
       return notInTest;
     }
 
