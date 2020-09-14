@@ -1,18 +1,20 @@
-import growthbook from '../src';
-import { ExperimentParams, AnalyticsWindow } from '../src/types';
-import { clearExperimentsTracked } from '../src/experiment';
+import GrowthBookClient from '../src';
+import {
+  ExperimentParams,
+  AnalyticsWindow,
+  UserAttributes,
+} from '../src/types';
+
+const client = new GrowthBookClient();
 
 const chooseVariation = (
-  userId: string | null,
-  test: string,
-  options: ExperimentParams = {}
+  userId: string,
+  experiment: string,
+  options: ExperimentParams = {},
+  attributes?: UserAttributes
 ) => {
-  if (userId) {
-    growthbook.configure({
-      userId,
-    });
-  }
-  return growthbook.experiment(test, options).variation;
+  const user = client.user(userId, attributes);
+  return user.experiment(experiment, options).variation;
 };
 
 // Allow mocking window.location values (e.g. for querystring variation forcing)
@@ -25,10 +27,10 @@ Object.defineProperty(window, 'location', {
 });
 
 const mockCallback = () => {
-  const onExperimentViewed = jest.fn((a, b) => {
-    return [a, b];
+  const onExperimentViewed = jest.fn(a => {
+    return a;
   });
-  growthbook.configure({
+  client.configure({
     onExperimentViewed,
   });
 
@@ -38,19 +40,16 @@ const mockCallback = () => {
 describe('experiments', () => {
   beforeEach(() => {
     // Reset growthbook configuration
-    growthbook.configure({
-      attributes: {},
+    client.configure({
       enableQueryStringOverride: false,
       enabled: true,
       experiments: {},
       onExperimentViewed: () => {
         // Nothing
       },
-      userId: undefined,
       ga: undefined,
-      segment: false,
+      segment: undefined,
     });
-    clearExperimentsTracked();
     window.location.search = '';
   });
 
@@ -103,27 +102,49 @@ describe('experiments', () => {
     expect(chooseVariation('1', 'my-test-3')).toEqual(0);
   });
   it('missing userId', () => {
-    expect(chooseVariation(null, 'my-test')).toBeGreaterThan(-1);
+    expect(chooseVariation('', 'my-test')).toEqual(-1);
   });
   it('tracking', () => {
     const mock = mockCallback();
 
-    chooseVariation('1', 'my-tracked-test');
-    chooseVariation('1', 'my-tracked-test');
-    chooseVariation('1', 'my-tracked-test');
-    chooseVariation('1', 'my-other-tracked-test');
-    chooseVariation('2', 'my-other-tracked-test');
+    const user1 = client.user('1');
+    const user2 = client.user('2');
+
+    user1.experiment('my-tracked-test');
+    user1.experiment('my-tracked-test');
+    user1.experiment('my-tracked-test');
+    user1.experiment('my-other-tracked-test');
+    user2.experiment('my-other-tracked-test');
 
     expect(mock.calls.length).toEqual(3);
-    expect(mock.calls[0][0]).toEqual('my-tracked-test');
-    expect(mock.calls[0][1]).toEqual(1);
+    expect(mock.calls[0][0]).toEqual({
+      experiment: 'my-tracked-test',
+      variation: 1,
+      data: {},
+      userId: '1',
+      userAttributes: {},
+    });
+    expect(mock.calls[1][0]).toEqual({
+      experiment: 'my-other-tracked-test',
+      variation: 0,
+      data: {},
+      userId: '1',
+      userAttributes: {},
+    });
+    expect(mock.calls[2][0]).toEqual({
+      experiment: 'my-other-tracked-test',
+      variation: 1,
+      data: {},
+      userId: '2',
+      userAttributes: {},
+    });
   });
 
   it('override variation', () => {
     expect(chooseVariation('6', 'forced-test')).toEqual(0);
 
     const mock = mockCallback();
-    growthbook.configure({
+    client.configure({
       experiments: {
         'forced-test': { force: 1 },
       },
@@ -133,7 +154,7 @@ describe('experiments', () => {
   });
 
   it('override weights', () => {
-    growthbook.configure({
+    client.configure({
       experiments: {
         'my-test': { weights: [0.1, 0.9] },
       },
@@ -142,7 +163,7 @@ describe('experiments', () => {
   });
 
   it('override coverage', () => {
-    growthbook.configure({
+    client.configure({
       experiments: {
         'my-test': { coverage: 0.4 },
       },
@@ -151,7 +172,7 @@ describe('experiments', () => {
   });
 
   it('targeting', () => {
-    growthbook.configure({
+    client.configure({
       experiments: {
         'my-test': {
           targeting: [
@@ -166,97 +187,99 @@ describe('experiments', () => {
     });
 
     // Matches all
-    growthbook.configure({
-      attributes: {
-        member: true,
-        age: 21,
-        source: 'yahoo',
-        name: 'george',
-        email: 'test@example.com',
-      },
+    const user = client.user('1', {
+      member: true,
+      age: 21,
+      source: 'yahoo',
+      name: 'george',
+      email: 'test@example.com',
     });
-    expect(chooseVariation('1', 'my-test')).toEqual(1);
+    expect(user.experiment('my-test').variation).toEqual(1);
 
     // Missing negative checks
-    growthbook.configure({
-      attributes: {
+    user.setAttributes(
+      {
         member: true,
         age: 21,
         source: 'yahoo',
       },
-    });
-    expect(chooseVariation('1', 'my-test')).toEqual(1);
+      false
+    );
+    expect(user.experiment('my-test').variation).toEqual(1);
 
     // Missing all attributes
-    growthbook.configure({
-      attributes: {},
-    });
-    expect(chooseVariation('1', 'my-test')).toEqual(-1);
+    user.setAttributes({}, false);
+    expect(user.experiment('my-test').variation).toEqual(-1);
 
     // Fails boolean
-    growthbook.configure({
-      attributes: {
+    user.setAttributes(
+      {
         member: false,
         age: 21,
         source: 'yahoo',
         name: 'george',
         email: 'test@example.com',
       },
-    });
-    expect(chooseVariation('1', 'my-test')).toEqual(-1);
+      false
+    );
+    expect(user.experiment('my-test').variation).toEqual(-1);
 
     // Fails number
-    growthbook.configure({
-      attributes: {
+    user.setAttributes(
+      {
         member: true,
         age: 17,
         source: 'yahoo',
         name: 'george',
         email: 'test@example.com',
       },
-    });
-    expect(chooseVariation('1', 'my-test')).toEqual(-1);
+      false
+    );
+    expect(user.experiment('my-test').variation).toEqual(-1);
 
     // Fails regex
-    growthbook.configure({
-      attributes: {
+    user.setAttributes(
+      {
         member: true,
         age: 21,
         source: 'goog',
         name: 'george',
         email: 'test@example.com',
       },
-    });
-    expect(chooseVariation('1', 'my-test')).toEqual(-1);
+      false
+    );
+    expect(user.experiment('my-test').variation).toEqual(-1);
 
     // Fails not equals
-    growthbook.configure({
-      attributes: {
+    user.setAttributes(
+      {
         member: true,
         age: 21,
         source: 'yahoo',
         name: 'matt',
         email: 'test@example.com',
       },
-    });
-    expect(chooseVariation('1', 'my-test')).toEqual(-1);
+      false
+    );
+    expect(user.experiment('my-test').variation).toEqual(-1);
 
     // Fails not regex
-    growthbook.configure({
-      attributes: {
+    user.setAttributes(
+      {
         member: true,
         age: 21,
         source: 'yahoo',
         name: 'george',
         email: 'test@exclude.com',
       },
-    });
-    expect(chooseVariation('1', 'my-test')).toEqual(-1);
+      false
+    );
+    expect(user.experiment('my-test').variation).toEqual(-1);
   });
 
   it('experiments disabled', () => {
     const mock = mockCallback();
-    growthbook.configure({
+    client.configure({
       enabled: false,
     });
 
@@ -269,7 +292,7 @@ describe('experiments', () => {
 
     expect(chooseVariation('1', 'forced-test-qs')).toEqual(0);
 
-    growthbook.configure({
+    client.configure({
       enableQueryStringOverride: true,
     });
 
@@ -278,7 +301,7 @@ describe('experiments', () => {
 
   it('querystring force disabled tracking', () => {
     const mock = mockCallback();
-    growthbook.configure({
+    client.configure({
       enableQueryStringOverride: true,
     });
 
@@ -306,7 +329,7 @@ describe('experiments', () => {
     expect(ga.mock.calls.length).toEqual(0);
 
     // Opt into tracking
-    growthbook.configure({
+    client.configure({
       ga: 5,
       segment: true,
     });
@@ -331,7 +354,7 @@ describe('experiments', () => {
 
   it('querystring missing ga and segment', () => {
     // Opt into tracking
-    growthbook.configure({
+    client.configure({
       ga: 5,
       segment: true,
     });
@@ -341,13 +364,11 @@ describe('experiments', () => {
   });
 
   it('configData experiment', () => {
-    growthbook.configure({
-      userId: '1',
-    });
+    const user = client.user('1');
 
     expect(
-      growthbook.experiment('my-test', {
-        configData: {
+      user.experiment('my-test', {
+        data: {
           color: ['blue', 'green'],
           size: ['small', 'large'],
         },
@@ -363,9 +384,9 @@ describe('experiments', () => {
 
     // Fallback to control config data if not in test
     expect(
-      growthbook.experiment('my-test', {
+      user.experiment('my-test', {
         coverage: 0.01,
-        configData: {
+        data: {
           color: ['blue', 'green'],
           size: ['small', 'large'],
         },
@@ -381,62 +402,60 @@ describe('experiments', () => {
   });
 
   it('configData lookup', () => {
-    growthbook.configure({
-      userId: '1',
+    client.configure({
       experiments: {
         'button-color-size-chrome': {
           targeting: ['browser = chrome'],
-          configData: {
+          data: {
             'button.color': ['blue', 'green'],
             'button.size': ['small', 'large'],
           },
         },
         'button-color-safari': {
           targeting: ['browser = safari'],
-          configData: {
+          data: {
             'button.color': ['blue', 'green'],
           },
         },
       },
     });
 
+    const user = client.user('1');
+
     // No matches
-    expect(growthbook.getConfigFromExperiments('button.unknown')).toEqual({
+    expect(user.lookupByDataKey('button.unknown')).toEqual({
       experiment: undefined,
       variation: undefined,
       value: undefined,
     });
 
     // First matching experiment
-    growthbook.configure({
-      attributes: { browser: 'chrome' },
+    user.setAttributes({
+      browser: 'chrome',
     });
-    expect(growthbook.getConfigFromExperiments('button.color')).toEqual({
+    expect(user.lookupByDataKey('button.color')).toEqual({
       experiment: 'button-color-size-chrome',
       variation: 0,
       value: 'blue',
     });
-    expect(growthbook.getConfigFromExperiments('button.size')).toEqual({
+    expect(user.lookupByDataKey('button.size')).toEqual({
       experiment: 'button-color-size-chrome',
       variation: 0,
       value: 'small',
     });
 
     // Fallback experiment
-    growthbook.configure({
-      attributes: { browser: 'safari' },
+    user.setAttributes({
+      browser: 'safari',
     });
-    expect(growthbook.getConfigFromExperiments('button.color')).toEqual({
+    expect(user.lookupByDataKey('button.color')).toEqual({
       experiment: 'button-color-safari',
       variation: 0,
       value: 'blue',
     });
 
     // Fallback undefined
-    growthbook.configure({
-      attributes: { browser: 'safari' },
-    });
-    expect(growthbook.getConfigFromExperiments('button.size')).toEqual({
+    expect(user.lookupByDataKey('button.size')).toEqual({
       experiment: undefined,
       variation: undefined,
       value: undefined,
