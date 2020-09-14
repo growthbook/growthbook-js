@@ -38,35 +38,18 @@ else if(variation === -1) {
 
 ## Client Configuration
 
-When creating the GrowthBookClient instance, you can pass in configuration options.
+The GrowthBookClient constructor takes an optional `options` argument.
 
-```js
-import GrowthBookClient from '@growthbook/growthbook';
+Below are all of the available options:
 
-const client = new GrowthBookClient({
-    // Default false. Set to true to enable forcing variations via url. Very useful for QA.
-    // For example: https://example.com/?my-experiment=1
-    enableQueryStringOverride: false,
+-  **enabled** - Default true. Set to false to completely disable all experiments.
+-  **onExperimentViewed** - Callback when the user views an experiment. Passed an object with `experiment` and `variation` properties.
 
-    // Default true. Set to false to disable all experiments.
-    // The variation returned will always be -1. This takes precedence over every other option.
-    enabled: true,
+Some additional options are only available when running in a browser:
 
-    // Default false. When true, calls `analytics.track` when an experiment is viewed
-    // Example call: analytics.track("Experiment Viewed", {experiment_id, variation_id, ...configData})
-    segment: true,
-
-    // Default 0. When a positive integer, sets the specified custom dimension and fires an event using window.ga
-    // 1st call: ga("set", "dimension"+n, `$(experiment_id}:${variation_number}`);
-    // 2nd call: ga("send", "event", "experiment", experiment_id, variation_number);
-    ga: 1,
-
-    // Optional callback when the user views an experiment
-    onExperimentViewed: (experiment, variation, configData) => {
-        console.log(experiment, variation, configData);
-    }
-});
-```
+-  **enableQueryStringOverride** - Default false.  If true, enables forcing variations via the URL.  Very useful for QA.  https://example.com/?my-experiment=1
+-  **segment** - Default false. If true, calls `analytics.track("Experiment Viewed")` automatically.
+-  **ga** - Track experiments in Google Analytics. Set to the custom dimension (1 to 20) you want to use for tracking.
 
 You can set new options at any point by calling the `client.configure` method. These are shallowly merged with existing options.
 
