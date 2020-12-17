@@ -8,6 +8,18 @@ export interface VariationData {
   [key: string]: unknown;
 }
 
+export type UserArg =
+  | {
+      anonId: string;
+      id?: string;
+      attributes?: UserAttributes;
+    }
+  | {
+      anonId?: string;
+      id: string;
+      attributes?: UserAttributes;
+    };
+
 export interface ExperimentResults {
   experiment: string;
   variation: number;
@@ -26,6 +38,7 @@ export interface ExperimentParams {
   weights?: number[];
   coverage?: number;
   targeting?: string[];
+  anon?: boolean;
   data?: ExperimentData;
   force?: number;
 }
@@ -37,7 +50,8 @@ export interface ExperimentsConfig {
 export type TrackExperimentFunctionProps = {
   experiment: string;
   variation: number;
-  userId: string;
+  userId?: string;
+  anonId?: string;
   data?: VariationData;
   userAttributes?: UserAttributes;
 };

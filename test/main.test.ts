@@ -9,17 +9,20 @@ import fetchMock from 'jest-fetch-mock';
 const client = new GrowthBookClient();
 
 const chooseVariation = (
-  userId: string,
+  userId: string | null,
   experiment: string,
   options: ExperimentParams = {},
-  attributes?: UserAttributes
+  attributes?: UserAttributes,
+  anonId?: string
 ) => {
-  const user = client.user(userId, attributes);
+  const user = client.user({
+    id: userId || '',
+    anonId: anonId || '',
+    attributes: attributes || {},
+  });
   return user.experiment(experiment, options).variation;
 };
 
-// Allow mocking window.location values (e.g. for querystring variation forcing)
-global.window = Object.create(window);
 Object.defineProperty(window, 'location', {
   value: {
     ...window.location,
@@ -153,11 +156,34 @@ describe('experiments', () => {
   it('missing userId', () => {
     expect(chooseVariation('', 'my-test', { variations: 2 })).toEqual(-1);
   });
+  it('anonId', () => {
+    expect(chooseVariation('1', 'my-test', { variations: 2 }, {}, '1')).toEqual(
+      1
+    );
+    expect(chooseVariation('1', 'my-test', { variations: 2 }, {}, '2')).toEqual(
+      1
+    );
+    expect(
+      chooseVariation('1', 'my-test', { variations: 2, anon: true }, {}, '1')
+    ).toEqual(1);
+    expect(
+      chooseVariation('1', 'my-test', { variations: 2, anon: true }, {}, '2')
+    ).toEqual(0);
+    expect(
+      chooseVariation('1', 'my-test', { variations: 2, anon: true })
+    ).toEqual(-1);
+    expect(
+      chooseVariation(null, 'my-test', { variations: 2, anon: true }, {}, '1')
+    ).toEqual(1);
+    expect(
+      chooseVariation(null, 'my-test', { variations: 2, anon: false }, {}, '1')
+    ).toEqual(-1);
+  });
   it('tracking', () => {
     const mock = mockCallback();
 
-    const user1 = client.user('1');
-    const user2 = client.user('2');
+    const user1 = client.user({ id: '1' });
+    const user2 = client.user({ id: '2' });
 
     user1.experiment('my-tracked-test', { variations: 2 });
     user1.experiment('my-tracked-test', { variations: 2 });
@@ -229,12 +255,15 @@ describe('experiments', () => {
     });
 
     // Matches all
-    const user = client.user('1', {
-      member: true,
-      age: 21,
-      source: 'yahoo',
-      name: 'george',
-      email: 'test@example.com',
+    const user = client.user({
+      id: '1',
+      attributes: {
+        member: true,
+        age: 21,
+        source: 'yahoo',
+        name: 'george',
+        email: 'test@example.com',
+      },
     });
     expect(user.experiment('my-test').variation).toEqual(1);
 
@@ -414,7 +443,7 @@ describe('experiments', () => {
   });
 
   it('configData experiment', () => {
-    const user = client.user('1');
+    const user = client.user({ id: '1' });
 
     expect(
       user.experiment('my-test', {
@@ -530,7 +559,7 @@ describe('experiments', () => {
       },
     });
 
-    const user = client.user('1');
+    const user = client.user({ id: '1' });
 
     // No matches
     expect(user.lookupByDataKey('button.unknown')).toEqual({

@@ -19,8 +19,7 @@ import GrowthBookClient from '@growthbook/growthbook';
 
 const client = new GrowthBookClient();
 
-// User id of the visitor being experimented on
-const user = client.user("12345");
+const user = client.user({id: "12345"});
 
 // Simple 50/50 split test
 const {variation} = user.experiment("experiment-id", {variations: 2});
@@ -61,14 +60,30 @@ client.configure({
 
 ## User Configuration
 
-The `client.user` method takes an optional 2nd argument with user attributes.  These attributes are never sent across the network and are only used to locally evaluate experiment targeting rules.
+The `client.user` method supports both logged-in and anonymous users. To create an anonymous user, specify `anonId` instead of `id`:
+```js
+const user = client.user({anonId: "abcdef"});
+```
+
+If you have both an anonymous id and a logged-in user id, you can pass both:
+```js
+const user = client.user({
+    anonId: "abcdef",
+    userId: "12345"
+});
+```
+
+You can also include attributes about the user.  These attributes are never sent across the network and are only used to locally evaluate experiment targeting rules:
 
 ```js
-const user = client.user("12345", {
-    // Any attributes about the user or page that you want to use for experiment targeting
-    premium: true,
-    accountAge: 36,
-    source: "google"
+const user = client.user({
+    id: "12345",
+    attributes: {
+        // Any attributes about the user or page that you want to use for experiment targeting
+        premium: true,
+        accountAge: 36,
+        source: "google"
+    }
 });
 ```
 
@@ -123,7 +138,10 @@ const {variation} = user.experiment("my-experiment-id", {
     coverage: 0.5,
     // How to split traffic between variations (must add to 1)
     weights: [0.34, 0.33, 0.33],
-    // Targeting rules
+    // If false, use the logged-in user id for assigning variations
+    // If true, use the logged-out anonymous_id
+    anon: false,
+    // Other targeting rules
     // Evaluated against user attributes to determine who is included in the test
     targeting: ["source != google"],
     // Add arbitrary data to the variations (see below for more info)
@@ -180,6 +198,8 @@ const {data} = user.experiment("experiment-id");
 button.color = data.color;
 ```
 
+Parameterization lets you modify the experiment without a code change.  For example, adding a 3rd color to the above test.
+
 ### Approach 3: Configuration System
 
 If you already have an existing configuration or feature flag system, you can do a deeper integration that 
@@ -204,7 +224,7 @@ export function getConfig(key) {
 
 Instead of generic keys like `color`, you probably want to be more descriptive with this approach (e.g. `homepage.cta.color`).
 
-With the following experiment definitions:
+With the following experiment definition:
 ```json
 {
     "variations": 2,

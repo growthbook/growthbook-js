@@ -1,8 +1,4 @@
-import {
-  ClientConfigInterface,
-  UserAttributes,
-  ExperimentsConfig,
-} from './types';
+import { ClientConfigInterface, UserArg, ExperimentsConfig } from './types';
 import GrowthBookUser from './user';
 
 export default class GrowthBookClient {
@@ -22,8 +18,8 @@ export default class GrowthBookClient {
     this.experiments = experiments;
   }
 
-  user(id: string, attributes: UserAttributes = {}): GrowthBookUser {
-    return new GrowthBookUser(id, attributes, this);
+  user({ anonId, id, attributes }: UserArg): GrowthBookUser {
+    return new GrowthBookUser(id || '', anonId || '', attributes || {}, this);
   }
 
   async pullExperimentConfigs(apiKey: string): Promise<boolean> {

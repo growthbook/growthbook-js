@@ -17,6 +17,7 @@ import GrowthBookClient from 'client';
 
 export default class GrowthBookUser {
   private id: string;
+  private anonId: string;
   private attributes: UserAttributes;
   private client: GrowthBookClient;
   private experimentsTracked: Set<string>;
@@ -24,10 +25,12 @@ export default class GrowthBookUser {
 
   constructor(
     id: string,
+    anonId: string,
     attributes: UserAttributes = {},
     client: GrowthBookClient
   ) {
     this.id = id;
+    this.anonId = anonId;
     this.attributes = attributes;
     this.client = client;
 
@@ -38,6 +41,10 @@ export default class GrowthBookUser {
 
   setId(id: string) {
     this.id = id;
+    return this;
+  }
+  setAnonId(id: string) {
+    this.anonId = id;
     return this;
   }
 
@@ -59,8 +66,8 @@ export default class GrowthBookUser {
       data: this.getVariationData(id, -1, options),
     };
 
-    // If experiments are disabled globally or no userId set
-    if (!this.client.config.enabled || !this.id) {
+    // If experiments are disabled globally
+    if (!this.client.config.enabled) {
       return notInTest;
     }
 
@@ -97,6 +104,12 @@ export default class GrowthBookUser {
       return notInTest;
     }
 
+    // Missing required type of user id
+    const userId = optionsClone?.anon ? this.anonId : this.id;
+    if (!userId) {
+      return notInTest;
+    }
+
     // Experiment has targeting rules, check if user matches
     if (optionsClone.targeting && !this.isTargeted(optionsClone.targeting)) {
       return notInTest;
@@ -105,9 +118,9 @@ export default class GrowthBookUser {
     const weights = getWeightsFromOptions(optionsClone);
 
     // Hash unique id and experiment id to randomly choose a variation given weights
-    const variation = chooseVariation(this.id, id, weights);
+    const variation = chooseVariation(userId, id, weights);
     const variationData = this.getVariationData(id, variation, options);
-    this.trackView(id, variation, variationData);
+    this.trackView(id, variation, userId, optionsClone.anon, variationData);
 
     return {
       experiment: id,
@@ -207,14 +220,13 @@ export default class GrowthBookUser {
   private trackView(
     experiment: string,
     variation: number,
+    userId?: string,
+    anon?: boolean,
     data?: VariationData
   ) {
     // Only track an experiment once per user/test
-    if (
-      variation !== -1 &&
-      !this.experimentsTracked.has(this.id + experiment)
-    ) {
-      this.experimentsTracked.add(this.id + experiment);
+    if (variation !== -1 && !this.experimentsTracked.has(userId + experiment)) {
+      this.experimentsTracked.add(userId + experiment);
 
       if (typeof window !== 'undefined') {
         const w = window as AnalyticsWindow;
@@ -244,7 +256,7 @@ export default class GrowthBookUser {
           experiment,
           variation,
           data,
-          userId: this.id,
+          [anon ? 'anonId' : 'userId']: userId,
           userAttributes: this.attributes,
         });
       }
