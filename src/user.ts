@@ -88,14 +88,7 @@ export default class GrowthBookUser {
     let optionsClone = { ...options };
     if (this.client.experiments && id in this.client.experiments) {
       // Value is forced, return immediately
-      const { force, ...overrides } = this.client.experiments[id];
-      if (force !== undefined) {
-        return {
-          experiment: id,
-          variation: force,
-          data: this.getVariationData(id, force, options),
-        };
-      }
+      const { ...overrides } = this.client.experiments[id];
       Object.assign(optionsClone, overrides);
     }
 
@@ -113,6 +106,15 @@ export default class GrowthBookUser {
     // Experiment has targeting rules, check if user matches
     if (optionsClone.targeting && !this.isTargeted(optionsClone.targeting)) {
       return notInTest;
+    }
+
+    // Experiment variation is forced
+    if (optionsClone.force !== undefined && optionsClone.force !== null) {
+      return {
+        experiment: id,
+        variation: optionsClone.force,
+        data: this.getVariationData(id, optionsClone.force, options),
+      };
     }
 
     const weights = getWeightsFromOptions(optionsClone);
