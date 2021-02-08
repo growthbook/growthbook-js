@@ -5,10 +5,11 @@
 Small utility library to run controlled experiments (i.e. A/B/n tests) in javascript.
 
 -  No dependencies
--  Lightweight and fast (2.3Kb gzipped)
+-  Lightweight and fast (2.7Kb gzipped)
+-  No HTTP requests, everything is defined and evaluated locally
 -  Supports both browser and NodeJS environments
+-  Works with static pages, SPAs, React, and more
 -  Written in Typescript with an extensive test suite
--  No HTTP requests, everything defined and evaluated locally
 -  Advanced user and page targeting
 -  Multiple implementation options
 
@@ -19,6 +20,15 @@ Small utility library to run controlled experiments (i.e. A/B/n tests) in javasc
 or 
 
 `npm install --save @growthbook/growthbook`
+
+or use directly in your HTML without installing first:
+
+```html
+<script type="module">
+import GrowthBookClient from 'https://unpkg.com/@growthbook/growthbook@0.5.1/dist/growthbook.esm.js';
+//...
+</script>
+```
 
 ## Usage
 
@@ -111,9 +121,7 @@ There are 4 different ways to run experiments. You can use more than one of thes
 
 ### 1. Automatic (Browser Only)
 
-With the Automatic approach, you put the variation code as part of the experiment definition.  Then, users who match the targeting rules will automatically be assigned a variation and run your code.
-
-If you are pulling the list of experiments from a database or API, that means you can start new experiments without any code deploys and avoid increasing tech debt.
+With the Automatic approach, users who match the targeting rules will automatically be assigned and shown a variation.
 
 Requirements:
 -  Browser environment (NodeJS support is coming soon)
@@ -155,15 +163,13 @@ client.experiments.push({
 });
 ```
 
-If the user lands on the url `/post/123`, they will be assigned a variation, any dom/css changes will be applied, and your `activate` function will be called if defined.
+If the user lands on the url `/post/123`, they will be assigned a variation, dom/css changes will be applied, and your `activate` function will be called.
 
-In addition, we add a `popstate` listener.  If you have a SPA and the user navigates to a different URL that no longer matches the targeting rules, the dom/css changes will be reverted and the `deactivate` function will be called.
-
-The main downside of the automatic approach is that it can make debugging and QA more difficult.
+In addition, we add a `popstate` listener that activates/deactivates experiments automatically as the URL changes.
 
 ### 2. Code Branching (Browser and NodeJS)
 
-The Code Branching approach works with all experiments.  Here is the most basic example:
+The Code Branching approach works with all experiments, even the most basic:
 
 ```ts
 client.experiments.push({
@@ -172,7 +178,7 @@ client.experiments.push({
 })
 ```
 
-To use, you would put the user in the experiment and get the variation back.
+To use, you would put the user in the experiment and get the assigned variation back.
 
 ```ts
 const {variation} = user.experiment("my-branching-experiment");
@@ -283,12 +289,10 @@ Below are all of the available options:
 -  **url** - The URL for the current request (defaults to `window.location.href` when in a browser)
 -  **enableQueryStringOverride** - Default false.  If true, enables forcing variations via the URL.  Very useful for QA.  https://example.com/?my-experiment=1
 
-You can set new options at any point by calling the `client.configure` method. These are shallowly merged with existing options.
+You can set new options at any point:
 
-```js
-client.configure({
-    enabled: false
-});
+```ts
+client.config.enabled = false;
 ```
 
 ## User Configuration
@@ -362,11 +366,16 @@ const client = new GrowthBookClient({
 });
 ```
 
-## Usage with Growth Book
+## Using with the Growth Book App
 
-We recommend using [Growth Book](https://www.growthbook.io) to manage your experiments and analyze results.
+It's not required, but we recommend using [Growth Book](https://www.growthbook.io) to manage your list of experiments and analyze results.
 
-Growth Book has an API endpoint that returns a JSON array of experiments in the exact format that this client library expects, so integration is super easy.
+-  Document your experiments with screenshots, markdown, and comment threads
+-  Connect to your existing data warehouse/lake to automatically fetch results
+-  Advanced bayesian statistics and automated data-quality checks (SRM, etc.)
+-  Simple and affordable pricing
+
+Integration is super easy:
 
 1.  Create a Growth Book API key - https://docs.growthbook.io/api
 2.  Periodically fetch the latest experiment list from the API and cache in your database
