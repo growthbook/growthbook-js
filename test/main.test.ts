@@ -1,17 +1,15 @@
+import { clearAppliedDomChanges, getWeightsFromOptions, checkRule, getQueryStringOverride } from '../src/util';
 import GrowthBookClient from '../src';
 import {
-  ExperimentParams,
-  AnalyticsWindow,
+  Experiment,
   UserAttributes,
 } from '../src/types';
-import fetchMock from 'jest-fetch-mock';
 
 const client = new GrowthBookClient();
 
 const chooseVariation = (
   userId: string | null,
-  experiment: string,
-  options: ExperimentParams = {},
+  experiment: string | Experiment,
   attributes?: UserAttributes,
   anonId?: string
 ) => {
@@ -20,7 +18,7 @@ const chooseVariation = (
     anonId: anonId || '',
     attributes: attributes || {},
   });
-  return user.experiment(experiment, options).variation;
+  return user.experiment(experiment).variation;
 };
 
 Object.defineProperty(window, 'location', {
@@ -34,9 +32,7 @@ const mockCallback = () => {
   const onExperimentViewed = jest.fn(a => {
     return a;
   });
-  client.configure({
-    onExperimentViewed,
-  });
+  client.config.onExperimentViewed = onExperimentViewed;
 
   return onExperimentViewed.mock;
 };
@@ -44,140 +40,114 @@ const mockCallback = () => {
 describe('experiments', () => {
   beforeEach(() => {
     // Reset growthbook configuration
-    client.configure({
-      enableQueryStringOverride: false,
-      enabled: true,
-      onExperimentViewed: () => {
-        // Nothing
-      },
-      ga: undefined,
-      segment: undefined,
-    });
-    client.setExperimentConfigs({});
-    window.location.search = '';
+    client.config.enableQueryStringOverride = false;
+    client.config.enabled = true;
+    client.config.onExperimentViewed = undefined;
+    client.config.url = "";
+    client.experiments = [];
+    clearAppliedDomChanges();
+    document.head.innerHTML = "";
+    document.body.innerHTML = "";
   });
 
   it('missing variations', () => {
     expect(chooseVariation('1', 'my-test')).toEqual(-1);
 
-    client.setExperimentConfigs({
-      'my-test': {
-        variations: 2,
-      },
+    client.experiments.push({
+      key: 'my-test',
+      variations: 2
     });
 
     expect(chooseVariation('1', 'my-test')).toEqual(1);
   });
 
   it('defaultWeights', () => {
-    expect(chooseVariation('1', 'my-test', { variations: 2 })).toEqual(1);
-    expect(chooseVariation('2', 'my-test', { variations: 2 })).toEqual(0);
-    expect(chooseVariation('3', 'my-test', { variations: 2 })).toEqual(0);
-    expect(chooseVariation('4', 'my-test', { variations: 2 })).toEqual(1);
-    expect(chooseVariation('5', 'my-test', { variations: 2 })).toEqual(1);
-    expect(chooseVariation('6', 'my-test', { variations: 2 })).toEqual(1);
-    expect(chooseVariation('7', 'my-test', { variations: 2 })).toEqual(0);
-    expect(chooseVariation('8', 'my-test', { variations: 2 })).toEqual(1);
-    expect(chooseVariation('9', 'my-test', { variations: 2 })).toEqual(0);
+    const exp = {
+      key: 'my-test',
+      variations: 2
+    }
+
+    expect(chooseVariation('1', exp)).toEqual(1);
+    expect(chooseVariation('2', exp)).toEqual(0);
+    expect(chooseVariation('3', exp)).toEqual(0);
+    expect(chooseVariation('4', exp)).toEqual(1);
+    expect(chooseVariation('5', exp)).toEqual(1);
+    expect(chooseVariation('6', exp)).toEqual(1);
+    expect(chooseVariation('7', exp)).toEqual(0);
+    expect(chooseVariation('8', exp)).toEqual(1);
+    expect(chooseVariation('9', exp)).toEqual(0);
   });
   it('unevenWeights', () => {
-    expect(
-      chooseVariation('1', 'my-test', { variations: 2, weights: [0.1, 0.9] })
-    ).toEqual(1);
-    expect(
-      chooseVariation('2', 'my-test', { variations: 2, weights: [0.1, 0.9] })
-    ).toEqual(1);
-    expect(
-      chooseVariation('3', 'my-test', { variations: 2, weights: [0.1, 0.9] })
-    ).toEqual(0);
-    expect(
-      chooseVariation('4', 'my-test', { variations: 2, weights: [0.1, 0.9] })
-    ).toEqual(1);
-    expect(
-      chooseVariation('5', 'my-test', { variations: 2, weights: [0.1, 0.9] })
-    ).toEqual(1);
-    expect(
-      chooseVariation('6', 'my-test', { variations: 2, weights: [0.1, 0.9] })
-    ).toEqual(1);
-    expect(
-      chooseVariation('7', 'my-test', { variations: 2, weights: [0.1, 0.9] })
-    ).toEqual(0);
-    expect(
-      chooseVariation('8', 'my-test', { variations: 2, weights: [0.1, 0.9] })
-    ).toEqual(1);
-    expect(
-      chooseVariation('9', 'my-test', { variations: 2, weights: [0.1, 0.9] })
-    ).toEqual(1);
+    const exp = {
+      key: 'my-test',
+      variations: 2,
+      variationInfo: [
+        { weight: 0.1 },
+        { weight: 0.9 }
+      ]
+    }
+
+    expect(chooseVariation('1', exp)).toEqual(1);
+    expect(chooseVariation('2', exp)).toEqual(1);
+    expect(chooseVariation('3', exp)).toEqual(0);
+    expect(chooseVariation('4', exp)).toEqual(1);
+    expect(chooseVariation('5', exp)).toEqual(1);
+    expect(chooseVariation('6', exp)).toEqual(1);
+    expect(chooseVariation('7', exp)).toEqual(0);
+    expect(chooseVariation('8', exp)).toEqual(1);
+    expect(chooseVariation('9', exp)).toEqual(1);
   });
   it('coverage', () => {
-    expect(
-      chooseVariation('1', 'my-test', { variations: 2, coverage: 0.4 })
-    ).toEqual(-1);
-    expect(
-      chooseVariation('2', 'my-test', { variations: 2, coverage: 0.4 })
-    ).toEqual(0);
-    expect(
-      chooseVariation('3', 'my-test', { variations: 2, coverage: 0.4 })
-    ).toEqual(0);
-    expect(
-      chooseVariation('4', 'my-test', { variations: 2, coverage: 0.4 })
-    ).toEqual(-1);
-    expect(
-      chooseVariation('5', 'my-test', { variations: 2, coverage: 0.4 })
-    ).toEqual(-1);
-    expect(
-      chooseVariation('6', 'my-test', { variations: 2, coverage: 0.4 })
-    ).toEqual(-1);
-    expect(
-      chooseVariation('7', 'my-test', { variations: 2, coverage: 0.4 })
-    ).toEqual(0);
-    expect(
-      chooseVariation('8', 'my-test', { variations: 2, coverage: 0.4 })
-    ).toEqual(-1);
-    expect(
-      chooseVariation('9', 'my-test', { variations: 2, coverage: 0.4 })
-    ).toEqual(1);
+    const exp = {
+      key: "my-test",
+      variations: 2,
+      coverage: 0.4
+    }
+
+    expect(chooseVariation('1', exp)).toEqual(-1);
+    expect(chooseVariation('2', exp)).toEqual(0);
+    expect(chooseVariation('3', exp)).toEqual(0);
+    expect(chooseVariation('4', exp)).toEqual(-1);
+    expect(chooseVariation('5', exp)).toEqual(-1);
+    expect(chooseVariation('6', exp)).toEqual(-1);
+    expect(chooseVariation('7', exp)).toEqual(0);
+    expect(chooseVariation('8', exp)).toEqual(-1);
+    expect(chooseVariation('9', exp)).toEqual(1);
   });
   it('threeWayTest', () => {
-    expect(chooseVariation('1', 'my-test', { variations: 3 })).toEqual(2);
-    expect(chooseVariation('2', 'my-test', { variations: 3 })).toEqual(0);
-    expect(chooseVariation('3', 'my-test', { variations: 3 })).toEqual(0);
-    expect(chooseVariation('4', 'my-test', { variations: 3 })).toEqual(2);
-    expect(chooseVariation('5', 'my-test', { variations: 3 })).toEqual(1);
-    expect(chooseVariation('6', 'my-test', { variations: 3 })).toEqual(2);
-    expect(chooseVariation('7', 'my-test', { variations: 3 })).toEqual(0);
-    expect(chooseVariation('8', 'my-test', { variations: 3 })).toEqual(1);
-    expect(chooseVariation('9', 'my-test', { variations: 3 })).toEqual(0);
+    const exp = {
+      key: "my-test",
+      variations: 3
+    }
+
+    expect(chooseVariation('1', exp)).toEqual(2);
+    expect(chooseVariation('2', exp)).toEqual(0);
+    expect(chooseVariation('3', exp)).toEqual(0);
+    expect(chooseVariation('4', exp)).toEqual(2);
+    expect(chooseVariation('5', exp)).toEqual(1);
+    expect(chooseVariation('6', exp)).toEqual(2);
+    expect(chooseVariation('7', exp)).toEqual(0);
+    expect(chooseVariation('8', exp)).toEqual(1);
+    expect(chooseVariation('9', exp)).toEqual(0);
   });
   it('testName', () => {
-    expect(chooseVariation('1', 'my-test', { variations: 2 })).toEqual(1);
-    expect(chooseVariation('1', 'my-test-3', { variations: 2 })).toEqual(0);
+    expect(chooseVariation('1', { key: 'my-test', variations: 2 })).toEqual(1);
+    expect(chooseVariation('1', { key: 'my-test-3', variations: 2 })).toEqual(0);
   });
   it('missing userId', () => {
-    expect(chooseVariation('', 'my-test', { variations: 2 })).toEqual(-1);
+    expect(chooseVariation('', { key: 'my-test', variations: 2 })).toEqual(-1);
   });
   it('anonId', () => {
-    expect(chooseVariation('1', 'my-test', { variations: 2 }, {}, '1')).toEqual(
-      1
-    );
-    expect(chooseVariation('1', 'my-test', { variations: 2 }, {}, '2')).toEqual(
-      1
-    );
-    expect(
-      chooseVariation('1', 'my-test', { variations: 2, anon: true }, {}, '1')
-    ).toEqual(1);
-    expect(
-      chooseVariation('1', 'my-test', { variations: 2, anon: true }, {}, '2')
-    ).toEqual(0);
-    expect(
-      chooseVariation('1', 'my-test', { variations: 2, anon: true })
-    ).toEqual(-1);
-    expect(
-      chooseVariation(null, 'my-test', { variations: 2, anon: true }, {}, '1')
-    ).toEqual(1);
-    expect(
-      chooseVariation(null, 'my-test', { variations: 2, anon: false }, {}, '1')
-    ).toEqual(-1);
+    const anonExp = { key: "my-test", variations: 2, anon: true }
+    const userExp = { key: "my-test", variations: 2, anon: false }
+
+    expect(chooseVariation('1', userExp, {}, '1')).toEqual(1);
+    expect(chooseVariation('1', userExp, {}, '2')).toEqual(1);
+    expect(chooseVariation('1', anonExp, {}, '1')).toEqual(1);
+    expect(chooseVariation('1', anonExp, {}, '2')).toEqual(0);
+    expect(chooseVariation('1', anonExp)).toEqual(-1);
+    expect(chooseVariation(null, anonExp, {}, '1')).toEqual(1);
+    expect(chooseVariation(null, userExp, {}, '1')).toEqual(-1);
   });
   it('tracking', () => {
     const mock = mockCallback();
@@ -185,73 +155,155 @@ describe('experiments', () => {
     const user1 = client.user({ id: '1' });
     const user2 = client.user({ id: '2' });
 
-    user1.experiment('my-tracked-test', { variations: 2 });
-    user1.experiment('my-tracked-test', { variations: 2 });
-    user1.experiment('my-tracked-test', { variations: 2 });
-    user1.experiment('my-other-tracked-test', { variations: 2 });
-    user2.experiment('my-other-tracked-test', { variations: 2 });
+    const exp1 = { key: "my-tracked-test", variations: 2 };
+    const exp2 = { key: "my-other-tracked-test", variations: 2 };
+
+    user1.experiment(exp1);
+    user1.experiment(exp1);
+    user1.experiment(exp1);
+    user1.experiment(exp2);
+    user2.experiment(exp2);
 
     expect(mock.calls.length).toEqual(3);
     expect(mock.calls[0][0]).toEqual({
-      experiment: 'my-tracked-test',
+      experiment: exp1,
       variation: 1,
+      variationKey: "1",
       data: {},
       userId: '1',
       userAttributes: {},
     });
     expect(mock.calls[1][0]).toEqual({
-      experiment: 'my-other-tracked-test',
+      experiment: exp2,
       variation: 0,
+      variationKey: "0",
       data: {},
       userId: '1',
       userAttributes: {},
     });
     expect(mock.calls[2][0]).toEqual({
-      experiment: 'my-other-tracked-test',
+      experiment: exp2,
       variation: 1,
+      variationKey: "1",
       data: {},
       userId: '2',
       userAttributes: {},
     });
   });
 
+  it('tracks variation keys', () => {
+    const exp = {
+      key: 'my-test',
+      variations: 2,
+      variationInfo: [
+        {
+          key: "first"
+        },
+        {
+          key: "second"
+        }
+      ]
+    };
+    const mock = mockCallback();
+
+    const user = client.user({ id: '1' });
+    user.experiment(exp);
+
+    expect(mock.calls.length).toEqual(1);
+    expect(mock.calls[0][0]).toEqual({
+      experiment: exp,
+      variation: 1,
+      variationKey: "second",
+      data: {},
+      userId: '1',
+      userAttributes: {},
+    });
+  })
+
+  it('handles weird experiment values', () => {
+    const spy = jest.spyOn(console, 'error').mockImplementation();
+
+    expect(getWeightsFromOptions({
+      key: "my-test",
+      variations: 1
+    })).toEqual([0.5,0.5]);
+
+    expect(getWeightsFromOptions({
+      key: "my-test",
+      variations: 30
+    })).toEqual([0.5,0.5]);
+
+    expect(getWeightsFromOptions({
+      key: "my-test",
+      variations: 2,
+      coverage: -0.2
+    })).toEqual([0.5, 0.5]);
+
+    expect(getWeightsFromOptions({
+      key: "my-test",
+      variations: 2,
+      coverage: 1.5
+    })).toEqual([0.5, 0.5]);
+
+    expect(getWeightsFromOptions({
+      key: "my-test",
+      variations: 2,
+      variationInfo: [
+        {weight: 0.4},
+        {weight: 0.1}
+      ]
+    })).toEqual([0.5, 0.5]);
+
+    expect(getWeightsFromOptions({
+      key: "my-test",
+      variations: 2,
+      variationInfo: [
+        {weight: 0.7},
+        {weight: 0.6}
+      ]
+    })).toEqual([0.5, 0.5]);
+
+    spy.mockRestore();
+  });
+
+  it('uses window.location.href by default', () => {
+    window.location.href = "http://example.com/path";
+    const newClient = new GrowthBookClient();
+    expect(newClient.config.url).toEqual(window.location.href);
+  });
+
   it('override variation', () => {
-    expect(chooseVariation('6', 'forced-test', { variations: 2 })).toEqual(0);
+    expect(chooseVariation('6', { key: 'forced-test', variations: 2 })).toEqual(0);
 
     const mock = mockCallback();
-    client.setExperimentConfigs({
-      'forced-test': { force: 1 },
+    client.experiments.push({
+      key: 'forced-test',
+      variations: 2,
+      force: 1,
     });
-    expect(chooseVariation('6', 'forced-test', { variations: 2 })).toEqual(1);
+    expect(chooseVariation('6', 'forced-test')).toEqual(1);
     expect(mock.calls.length).toEqual(0);
   });
 
-  it('override weights', () => {
-    client.setExperimentConfigs({
-      'my-test': { weights: [0.1, 0.9] },
-    });
-    expect(chooseVariation('2', 'my-test', { variations: 2 })).toEqual(1);
-  });
-
-  it('override coverage', () => {
-    client.setExperimentConfigs({
-      'my-test': { coverage: 0.4 },
-    });
-    expect(chooseVariation('1', 'my-test', { variations: 2 })).toEqual(-1);
-  });
+  it('handles weird targeting rules', () => {
+    const spy = jest.spyOn(console, 'error').mockImplementation();
+    expect(checkRule("9", "<", "20")).toEqual(true);
+    expect(checkRule("5", "<", "4")).toEqual(false);
+    expect(checkRule("a", "?", "b")).toEqual(true);
+    spy.mockRestore();
+  })
 
   it('targeting', () => {
-    client.setExperimentConfigs({
-      'my-test': {
-        variations: 2,
-        targeting: [
-          'member = true',
-          'age > 18',
-          'source ~ (google|yahoo)',
-          'name != matt',
-          'email !~ ^.*@exclude.com$',
-        ],
-      },
+    client.experiments.push({
+      key: 'my-test',
+      variations: 2,
+      targeting: [
+        'member = true',
+        'age > 18',
+        'source ~ (google|yahoo)',
+        'name != matt',
+        'email !~ ^.*@exclude.com$',
+      ],
     });
 
     // Matches all
@@ -350,235 +402,322 @@ describe('experiments', () => {
 
   it('experiments disabled', () => {
     const mock = mockCallback();
-    client.configure({
-      enabled: false,
-    });
+    client.config.enabled = false;
 
-    expect(chooseVariation('1', 'disabled-test', { variations: 2 })).toEqual(
-      -1
-    );
+    expect(chooseVariation('1', { key: 'disabled-test', variations: 2 })).toEqual(-1);
     expect(mock.calls.length).toEqual(0);
   });
 
   it('querystring force', () => {
-    window.location.search = '?forced-test-qs=1';
+    client.experiments.push({
+      key: 'forced-test-qs',
+      variations: 2
+    })
+    client.config.url = "http://example.com?forced-test-qs=1#someanchor";
 
-    expect(chooseVariation('1', 'forced-test-qs', { variations: 2 })).toEqual(
-      0
-    );
+    expect(chooseVariation('1', 'forced-test-qs')).toEqual(0);
 
-    client.configure({
-      enableQueryStringOverride: true,
-    });
-
-    expect(chooseVariation('1', 'forced-test-qs', { variations: 2 })).toEqual(
-      1
-    );
+    client.config.enableQueryStringOverride = true;
+    expect(chooseVariation('1', 'forced-test-qs')).toEqual(1);
   });
 
   it('querystring force disabled tracking', () => {
     const mock = mockCallback();
-    client.configure({
-      enableQueryStringOverride: true,
-    });
-
-    window.location.search = '?forced-test-qs=1';
-    expect(chooseVariation('1', 'forced-test-qs', { variations: 2 })).toEqual(
-      1
-    );
+    client.experiments.push({
+      key: 'forced-test-qs',
+      variations: 2
+    })
+    client.config.url = "http://example.com?forced-test-qs=1";
+    client.config.enableQueryStringOverride = true;
+    expect(chooseVariation('1', 'forced-test-qs')).toEqual(1);
 
     expect(mock.calls.length).toEqual(0);
   });
 
-  it('querystring ga segment tracking', () => {
-    const segment = jest.fn((a, b) => {
-      return [a, b];
-    });
-    const ga = jest.fn((a, b, c, d, e) => {
-      return [a, b, c, d, e];
-    });
-    (window as AnalyticsWindow).analytics = {
-      track: segment,
+  it('querystring force invalid url', () => {
+    client.config.url = "";
+    expect(getQueryStringOverride("my-test", client)).toEqual(null);
+
+    client.config.url = "http://example.com";
+    expect(getQueryStringOverride("my-test", client)).toEqual(null);
+
+    client.config.url = "http://example.com?";
+    expect(getQueryStringOverride("my-test", client)).toEqual(null);
+
+    client.config.url = "http://example.com?somequery";
+    expect(getQueryStringOverride("my-test", client)).toEqual(null);
+
+    client.config.url = "http://example.com??&&&?#";
+    expect(getQueryStringOverride("my-test", client)).toEqual(null);
+  })
+
+  it('url targeting', () => {
+    const exp = {
+      key: 'my-test',
+      variations: 2,
+      url: "^/post/[0-9]+"
     };
-    (window as AnalyticsWindow).ga = ga;
 
-    // Should not track by default
-    chooseVariation('1', 'my-test', { variations: 2 });
-    expect(segment.mock.calls.length).toEqual(0);
-    expect(ga.mock.calls.length).toEqual(0);
+    client.config.url = "http://example.com";
+    expect(chooseVariation('1',exp)).toEqual(-1);
 
-    // Opt into tracking
-    client.configure({
-      ga: 5,
-      segment: true,
-    });
+    client.config.url = "http://example.com/post/123";
+    expect(chooseVariation('1',exp)).toEqual(1);
 
-    // Should track now
-    expect(chooseVariation('2', 'my-test', { variations: 2 })).toEqual(0);
-    expect(segment.mock.calls.length).toEqual(1);
-    expect(segment.mock.calls[0]).toEqual([
-      'Experiment Viewed',
-      { experiment_id: 'my-test', variation_id: 0 },
-    ]);
-    expect(ga.mock.calls.length).toEqual(2);
-    expect(ga.mock.calls[0]).toEqual(['set', 'dimension5', 'my-test:0']);
-    expect(ga.mock.calls[1]).toEqual([
-      'send',
-      'event',
-      'experiment',
-      'my-test',
-      '0',
-    ]);
+    exp.url = "http://example.com/post/[0-9]+";
+    expect(chooseVariation('1',exp)).toEqual(1);
   });
 
-  it('querystring missing ga and segment', () => {
-    // Opt into tracking
-    client.configure({
-      ga: 5,
-      segment: true,
-    });
+  it('invalid url regex', () => {
+    const exp = {
+      key: 'my-test',
+      variations: 2,
+      url: "???***[)"
+    };
+    client.config.url = 'http://example.com';
+    expect(chooseVariation('1',exp)).toEqual(-1);
+  });
 
-    // No errors thrown, even though window.ga and window.analytics are missing
-    expect(chooseVariation('2', 'my-test', { variations: 2 })).toEqual(0);
+  it('ignores draft experiments', () => {
+    const exp: Experiment = {
+      key: 'my-test',
+      status: 'draft',
+      variations: 2
+    };
+
+    expect(chooseVariation('1',exp)).toEqual(-1);
+
+    client.config.url = 'http://example.com/?my-test=1';
+    client.config.enableQueryStringOverride = true;
+
+    expect(chooseVariation('1',exp)).toEqual(1);
+  });
+
+  it('applies dom changes', () => {
+    client.experiments.push({
+      key: "my-test",
+      variations: 2,
+      variationInfo: [
+        {},
+        {
+          dom: [
+            {
+              selector: "h1",
+              mutation: "addClass",
+              value: "new"
+            },
+            {
+              selector: "h1",
+              mutation: "removeClass",
+              value: "first"
+            },
+            {
+              selector: "h1",
+              mutation: "setHTML",
+              value: "hello"
+            },
+            {
+              selector: "h1",
+              mutation: "appendHTML",
+              value: " world"
+            },
+            {
+              selector: "h1",
+              mutation: "setAttribute",
+              value: "title=\"hello\""
+            }
+          ]
+        }
+      ]
+    });
+    document.body.innerHTML = "<h1 class='first second'>my title</h1>";
+    const user = client.user({id: "1"});
+    const {variation, apply} = user.experiment("my-test");
+
+    const el = document.querySelector("h1");
+
+    expect(variation).toEqual(1);
+    expect(el?.innerHTML).toEqual("my title");
+    apply();
+    expect(el?.innerHTML).toEqual("hello world");
+    expect(el?.getAttribute("class")).toEqual("second new");
+    expect(el?.getAttribute("title")).toEqual("hello");
+  });
+
+  it('applies css changes', () => {
+    client.experiments.push({
+      key: "my-test",
+      variations: 2,
+      variationInfo: [
+        {},
+        {
+          css: "body{color:red}"
+        }
+      ]
+    });
+    document.head.innerHTML = "";
+    const user = client.user({id: "1"});
+    const {variation, apply} = user.experiment("my-test");
+
+    expect(variation).toEqual(1);
+    expect(document.head.innerHTML).toEqual("");
+    apply();
+    expect(document.head.innerHTML).toEqual("<style>body{color:red}</style>");
+  });
+
+  it('auto runs tests', () => {
+    client.experiments.push({
+      key: "my-test",
+      variations: 2,
+      auto: true,
+      url: ".*",
+      variationInfo: [
+        {},
+        {
+          dom: [
+            {
+              selector: "h1",
+              mutation: "setHTML",
+              value: "hello world"
+            }
+          ]
+        }
+      ]
+    });
+    client.config.url = "http://www.example.com";
+    document.body.innerHTML = "<h1>my title</h1>";
+    client.user({id: "1"});
+    expect(document.querySelector("h1")?.innerHTML).toEqual("hello world");
+  });
+
+  it('does not reapply the same change', () => {
+    const exp: Experiment = {
+      key: "my-test",
+      variations: 2,
+      variationInfo: [
+        {},
+        {
+          css: "body{color:red}",
+          dom: [
+            {
+              selector: "h1",
+              mutation: "appendHTML",
+              value: " world"
+            }
+          ]
+        }
+      ]
+    };
+    document.head.innerHTML = "";
+    document.body.innerHTML = "<h1>hello</h1>";
+    const user = client.user({id: "1"});
+    const {apply} = user.experiment(exp);
+
+    apply();
+    apply();
+    apply();
+
+    expect(document.querySelector("h1")?.innerHTML).toEqual("hello world");
+    expect(document.head.innerHTML).toEqual("<style>body{color:red}</style>");
   });
 
   it('configData experiment', () => {
     const user = client.user({ id: '1' });
 
-    expect(
-      user.experiment('my-test', {
-        variations: 2,
-        data: {
-          color: ['blue', 'green'],
-          size: ['small', 'large'],
+    const exp: Experiment = {
+      key: 'my-test',
+      variations: 2,
+      variationInfo: [
+        {
+          data: {
+            color: "blue",
+            size: "small"
+          }
         },
-      })
-    ).toEqual({
-      experiment: 'my-test',
-      variation: 1,
-      data: {
-        color: 'green',
-        size: 'large',
-      },
-    });
-
-    // Fallback to control config data if not in test
-    expect(
-      user.experiment('my-test', {
-        coverage: 0.01,
-        variations: 2,
-        data: {
-          color: ['blue', 'green'],
-          size: ['small', 'large'],
-        },
-      })
-    ).toEqual({
-      experiment: 'my-test',
-      variation: -1,
-      data: {
-        color: 'blue',
-        size: 'small',
-      },
-    });
-  });
-
-  it('pull configs from api', async () => {
-    fetchMock.enableMocks();
-    fetchMock.mockResponse(
-      JSON.stringify({
-        status: 200,
-        experiments: {
-          'my-test': {
-            variations: 3,
-          },
-        },
-      })
-    );
-
-    await client.pullExperimentConfigs('12345');
-
-    expect(client.experiments).toEqual({
-      'my-test': {
-        variations: 3,
-      },
-    });
-  });
-
-  it('pull configs from api 403', async () => {
-    fetchMock.enableMocks();
-    fetchMock.mockResponseOnce(
-      JSON.stringify({
-        status: 403,
-        message: 'Invalid API key',
-      })
-    );
-
-    await client.pullExperimentConfigs('12345');
-
-    expect(client.experiments).toEqual({});
-  });
-
-  it('pull configs from api network error', async () => {
-    fetchMock.enableMocks();
-    const error = new Error('Network error');
-    fetchMock.mockRejectOnce(error);
-
-    // Mock console.error
-    const origError = console.error;
-    const consoleErrors: any[] = [];
-    console.error = (...args: any[]) => {
-      consoleErrors.push(args);
+        {
+          data: {
+            color: "green",
+            size: "large"
+          }
+        }
+      ]
     };
 
-    await client.pullExperimentConfigs('12345');
+    const res1 = user.experiment(exp);
+    expect(res1.variation).toEqual(1);
+    expect(res1.data).toEqual({
+      color: 'green',
+      size: 'large',
+    });
 
-    // Restore original console.error
-    console.error = origError;
 
-    expect(client.experiments).toEqual({});
-    expect(consoleErrors.length).toEqual(1);
-    expect(consoleErrors[0][0]).toEqual(error);
+    // Fallback to control config data if not in test
+    exp.coverage = 0.01;
+    const res2 = user.experiment(exp);
+    expect(res2.variation).toEqual(-1);
+    expect(res2.data).toEqual({
+      color: 'blue',
+      size: 'small',
+    });
   });
 
   it('configData lookup', () => {
-    client.setExperimentConfigs({
-      'button-color-size-chrome': {
-        variations: 2,
-        targeting: ['browser = chrome'],
-        data: {
-          'button.color': ['blue', 'green'],
-          'button.size': ['small', 'large'],
+    const expChrome = {
+      key: 'button-color-size-chrome',
+      variations: 2,
+      targeting: ['browser = chrome'],
+      variationInfo: [
+        {
+          data: {
+            "button.color": "blue",
+            "button.size": "small"
+          }
         },
-      },
-      'button-color-safari': {
-        variations: 2,
-        targeting: ['browser = safari'],
-        data: {
-          'button.color': ['blue', 'green'],
+        {
+          data: {
+            "button.color": "green",
+            "button.size": "large"
+          }
+        }
+      ]
+    };
+    const expSafari = {
+      key: 'button-color-safari',
+      variations: 2,
+      targeting: ['browser = safari'],
+      variationInfo: [
+        {
+          data: {
+            "button.color": "blue",
+          }
         },
-      },
-    });
+        {
+          data: {
+            "button.color": "green",
+          }
+        }
+      ]
+    }
+
+    client.experiments.push(expChrome);
+    client.experiments.push(expSafari);
 
     const user = client.user({ id: '1' });
 
     // No matches
-    expect(user.lookupByDataKey('button.unknown')).toEqual({
-      experiment: undefined,
-      variation: undefined,
-      value: undefined,
-    });
+    expect(user.lookupByDataKey('button.unknown')).toEqual({});
 
     // First matching experiment
     user.setAttributes({
       browser: 'chrome',
     });
     expect(user.lookupByDataKey('button.color')).toEqual({
-      experiment: 'button-color-size-chrome',
+      experiment: expChrome,
       variation: 0,
       value: 'blue',
     });
     expect(user.lookupByDataKey('button.size')).toEqual({
-      experiment: 'button-color-size-chrome',
+      experiment: expChrome,
       variation: 0,
       value: 'small',
     });
@@ -588,16 +727,12 @@ describe('experiments', () => {
       browser: 'safari',
     });
     expect(user.lookupByDataKey('button.color')).toEqual({
-      experiment: 'button-color-safari',
+      experiment: expSafari,
       variation: 0,
       value: 'blue',
     });
 
     // Fallback undefined
-    expect(user.lookupByDataKey('button.size')).toEqual({
-      experiment: undefined,
-      variation: undefined,
-      value: undefined,
-    });
+    expect(user.lookupByDataKey('button.size')).toEqual({});
   });
 });

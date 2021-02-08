@@ -2,7 +2,15 @@
 
 ![Build Status](https://github.com/growthbook/growthbook-js/workflows/Build/badge.svg)
 
-Small utility library to run controlled experiments (i.e. AB tests). Comaptible with the Growth Book experimentation platform.
+Small utility library to run controlled experiments (i.e. A/B/n tests) in javascript.
+
+-  No dependencies
+-  Lightweight and fast (2.3Kb gzipped)
+-  Supports both browser and NodeJS environments
+-  Written in Typescript with an extensive test suite
+-  No HTTP requests, everything defined and evaluated locally
+-  Advanced user and page targeting
+-  Multiple implementation options
 
 ## Installation
 
@@ -12,17 +20,106 @@ or
 
 `npm install --save @growthbook/growthbook`
 
-## Quick Usage
+## Usage
 
-```js
+Basic setup:
+
+```ts
 import GrowthBookClient from '@growthbook/growthbook';
 
 const client = new GrowthBookClient();
 
+// Add experiments to the client
+client.experiments.push({
+    key: "my-experiment",
+    variations: 2
+});
+
+// Define the user that you want to run an experiment on
 const user = client.user({id: "12345"});
 
-// Simple 50/50 split test
-const {variation} = user.experiment("experiment-id", {variations: 2});
+// Run the experioment
+const {variation} = user.experiment("my-experiment");
+```
+
+## Experiments
+
+As shown above, the simplest experiment you can define has 2 fields: `key` and `variations`:
+
+```ts
+client.experiments.push({
+    key: "my-experiment",
+    variations: 2
+});
+```
+
+There are a lot more configuration options you can specify.  Here is the full typescript definition:
+
+```ts
+interface Experiment {
+    // The globally unique tracking key for the experiment
+    key: string;
+    // "draft" is only considered when forcing a variation via querystring (for QA)
+    status: "draft" | "running" | "stopped";
+    // Number of variations including the control (always at least 2)
+    variations: number;
+    // What percent of users should be included in the experiment. Float from 0 to 1.
+    coverage?: number;
+    // Users can only be included in this experiment if the current URL matches this regex
+    url?: string;
+    // Array of strings if the format "{key} {operator} {value}"
+    // Users must pass all of these targeting rules to be included in this experiment
+    targeting?: string[];
+    // If specified, all users included in the experiment should be forced into the 
+    // specified variation (0 is control, 1 is first variation, etc.)
+    force?: number;
+    // If true, use anonymous id for assigning, otherwise use logged-in user id
+    anon: boolean;
+    // Array of variations, index 0 is control, index 1 is first variation, etc.
+    variationInfo: {
+        // The tracking key for the variation (not globally unique)
+        // Defaults to "0" for control, "1" for first variation, etc.
+        key?: string;
+        // Determines traffic split. Float from 0 to 1, weights for all variations must sum to 1.
+        // Defaults to an even split between all variations
+        weight?: number;
+        // Arbitrary data attached to the variation. Used to parameterize experiments.
+        data?: {
+            [key: string]: any;
+        };
+        // CSS rules that should be injected to the page if this variation is chosen
+        css?: string;
+        // DOM modifications that should be applied if this variation is chosen
+        dom?: {
+            selector: string;
+            mutation: "addClass" | "removeClass" | "appendHTML" | "setHTML" | "setAttribute";
+            value: string;
+        }[];
+    }[];
+    // If true, users who match all targeting rules should automatically be put into the test
+    auto: boolean;
+}
+```
+
+## Running Experiments
+
+There are 4 different ways to run experiments. You can use more than one of these at a time; choose what makes sense on a case-by-case basis.
+
+### 1. Code Branching (Browser and NodeJS)
+
+This approach works with all experiments.  Here is the most basic example:
+
+```ts
+client.experiments.push({
+    key: "my-branching-experiment",
+    variations: 2
+})
+```
+
+To use, you would put the user in the experiment and get the variation back.
+
+```ts
+const {variation} = user.experiment("my-branching-experiment");
 
 if(variation === 0) {
     console.log('Control');
@@ -35,6 +132,134 @@ else if(variation === -1) {
 }
 ```
 
+### 2. Visual Editor (Browser Only)
+
+Code branching is easy to understand, but requires deploying new code for every experiment and adds to tech debt.
+
+Using the Visual Editor approach, you instead define the DOM mutations and/or CSS styles for each variation and they are applied automatically.
+
+All you need to do is add a new experiment to the client and users will automatically be assigned and shown a variation.
+
+If you are pulling the list of experiments from a database or API, that means you can start new experiments without any code deploys.
+
+Requirements:
+-  Browser environment (NodeJS support is coming soon)
+-  Experiment must have `auto` set to true
+-  Experiment must set the `url` regex field (setting to `.*` is fine, it just can't be empty)
+-  Experiment must define `variationInfo` with `dom` and/or `css` properties
+
+Here is an example experiment that meets these requirements:
+
+```ts
+client.experiments.push({
+    key: "my-visual-editor-experiment",
+    variations: 2,
+    auto: true,
+    url: "^/post/[0-9]+",
+    variationInfo: [
+        // Control
+        {
+            // No DOM or CSS changes for the control
+        },
+        // Variation
+        {
+            dom: [
+                {
+                    selector: "h1",
+                    mutation: "setHTML",
+                    value: "My New Title"
+                }
+            ],
+            css: "h1 { color: red; }"
+        }
+    ]
+})
+```
+
+### 3. Parameterization (Browser and NodeJS)
+
+If the Visual Editor is not flexible enough and you don't want to add branching to your code, you can use Parameterization instead.
+
+Requirements:
+-  Experiment must define `variationInfo` with the `data` property
+
+Here is an example experiment that meets this requirement:
+```ts
+client.experiments.push({
+    key: "my-parameterized-experiment",
+    variations: 2,
+    variationInfo: [
+        // Control
+        {
+            data: {
+                color: "blue"
+            }
+        },
+        // Variation
+        {
+            data: {
+                color: "green"
+            }
+        }
+    ]
+})
+```
+
+Then instead of branching, you would extract the data from the chosen variation:
+```ts
+const {data} = user.experiment("my-parameterized-experiment");
+
+// Use data tied to the chosen variation, no branching required
+const buttonColor = data.color || "blue";
+```
+
+### 4. Feature Flags (Browser and NodeJS)
+
+Parameterization still requires referencing experiment keys directly in code, which adds to tech debt.  Using feature flags, you can get some of the same benefits while also keeping your code more maintainable.
+
+Requirements:
+-  Experiment must define `variationInfo` with the `data` property
+-  Use more descriptive data keys (e.g. `homepage.button.color` instead of just `color`)
+
+Here is an example experiment that meets these requirements:
+
+```ts
+client.experiments.push({
+    key: "my-feature-flag-experiment",
+    variations: 2,
+    variationInfo: [
+        // Control
+        {
+            data: {
+                "homepage.button.color": "blue"
+            }
+        },
+        // Variation
+        {
+            data: {
+                "homepage.button.color": "green"
+            }
+        }
+    ]
+})
+```
+
+Now you can do a lookup based on the data key without knowing about which (if any) experiments are running:
+
+```ts
+function getFeatureFlag(key: string, defaultValue: any) {
+    // First see if any experiments override a value for this key
+    const {value} = user.lookupByDataKey(key);
+    if(value!==undefined) return value;
+
+    // TODO: Fallback to other feature flag system
+
+    return defaultValue;
+}
+
+const buttonColor = getFeatureFlag("homepage.button.color", "blue");
+```
+
 ## Client Configuration
 
 The GrowthBookClient constructor takes an optional `options` argument.
@@ -43,12 +268,8 @@ Below are all of the available options:
 
 -  **enabled** - Default true. Set to false to completely disable all experiments.
 -  **onExperimentViewed** - Callback when the user views an experiment. Passed an object with `experiment` and `variation` properties.
-
-Some additional options are only available when running in a browser:
-
+-  **url** - The URL for the current request (defaults to `window.location.href` when in a browser)
 -  **enableQueryStringOverride** - Default false.  If true, enables forcing variations via the URL.  Very useful for QA.  https://example.com/?my-experiment=1
--  **segment** - Default false. If true, calls `analytics.track("Experiment Viewed")` automatically.
--  **ga** - Track experiments in Google Analytics. Set to the custom dimension (1 to 20) you want to use for tracking.
 
 You can set new options at any point by calling the `client.configure` method. These are shallowly merged with existing options.
 
@@ -96,148 +317,45 @@ user.setAttributes({
 })
 ```
 
-## Experiment Configuration
+### Targeting
 
-The default test is a 50/50 split with no targeting or customization.  There are a few ways to configure this on a test-by-test basis.
+Experiments can target on these user attributes with the `targeting` field.  Here's an example:
 
-### Option 1: Auto-Pull from Growth Book API (Browser only)
-
-This uses `window.fetch` to pull your latest experiment configs from the growthbook API.
-
-```js
-await client.pullExperimentConfigs("growthbook-api-key");
+```ts
+client.experiments.push({
+    key: "my-targeted-experiment",
+    variations: 2,
+    targeting: [
+        "premium = true",
+        "accountAge > 30"
+    ]
+})
 ```
 
-### Option 2: Manually Fetch Configs (NodeJS)
+Users will only be included in the experiment if they match the targeting rules.
 
-NodeJS environments are much more varied than browsers, so Growth Book does not ship a built-in solution.  However, 
-it's very simple to create your own custom solution.  For example:
+## Event Tracking
 
-```js
-const fetch = require('node-fetch');
+Typically, you'll want to track who sees which experiment so you can analyze the data later.  Here's an example of tracking with Segment:
 
-const API_KEY = "growthbook-api-key";
-fetch(`https://cdn.growthbook.io/config/${API_KEY}`)
-    .then(res => res.json())
-    .then(json => {
-        client.setExperimentConfigs(json.experiments);
-    })
-```
-
-Our API is behind a global CDN, so it's very fast and reliable.  However, we do still recommend adding a persistent caching layer (redis, DynamoDB, etc.) if possible.
-
-### Option 3: Inline Experiment Configuration
-
-In some cases, you may prefer to set experiment parameters inline when doing variation assignment:
-
-```js
-const {variation} = user.experiment("my-experiment-id", {
-    // Number of variations (including the control)
-    variations: 3,
-    // Percent of traffic to include in the test (from 0 to 1)
-    coverage: 0.5,
-    // How to split traffic between variations (must add to 1)
-    weights: [0.34, 0.33, 0.33],
-    // If false, use the logged-in user id for assigning variations
-    // If true, use the logged-out anonymous_id
-    anon: false,
-    // Other targeting rules
-    // Evaluated against user attributes to determine who is included in the test
-    targeting: ["source != google"],
-    // Add arbitrary data to the variations (see below for more info)
-    data: {
-        color: ["blue","green","red"]
+```ts
+// Specify a tracking callback when instantiating the client
+const client = new GrowthBookClient({
+    onExperimentViewed: (data) => {
+        analytics.track("Experiment Viewed", {
+            experimentId: data.experiment.key,
+            variationId: data.variationKey
+        });
     }
 });
 ```
 
-## Running Experiments
+## Usage with Growth Book
 
-Growth Book supports 3 different implementation approaches:
+We recommend using [Growth Book](https://www.growthbook.io) to manage your experiments and analyze results.
 
-1.  Branching
-2.  Parameterization
-3.  Config System
+Growth Book has an API endpoint that returns a JSON array of experiments in the exact format that this client library expects, so integration is super easy.
 
-### Approach 1: Branching
-
-This is the simplest to understand and implement. You add branching via if/else or switch statements:
-
-```js
-const {variation} = user.experiment("experiment-id");
-
-if(variation === 1) {
-    // Variation
-    button.color = "green";
-}
-else {
-    // Control
-    button.color = "blue";
-}
-```
-
-### Approach 2: Parameterization
-
-With this approach, you parameterize the variations by associating them with data.
-
-With the following experiment definition:
-```json
-{
-    "variations": 2,
-    "data": {
-        "color": ["blue", "green"]
-    }
-}
-```
-
-You can now implement the test like this instead:
-```js
-const {data} = user.experiment("experiment-id");
-
-// Will be either "blue" or "green"
-button.color = data.color;
-```
-
-Parameterization lets you modify the experiment without a code change.  For example, adding a 3rd color to the above test.
-
-### Approach 3: Configuration System
-
-If you already have an existing configuration or feature flag system, you can do a deeper integration that 
-avoids `experiment` calls throughout your code base entirely.
-
-All you need to do is modify your existing config system to get experiment overrides before falling back to your normal lookup process:
-
-```js
-// Your existing function
-export function getConfig(key) {
-    // Look for a valid matching experiment. 
-    // If found, choose a variation and return the value for the requested key
-    const {value} = user.lookupByDataKey(key);
-    if(value) {
-        return value;
-    }
-
-    // Continue with your normal lookup process
-    ...
-}
-```
-
-Instead of generic keys like `color`, you probably want to be more descriptive with this approach (e.g. `homepage.cta.color`).
-
-With the following experiment definition:
-```json
-{
-    "variations": 2,
-    "data": {
-        "homepage.cta.color": ["blue", "green"]
-    }
-}
-```
-
-You can now do:
-
-```js
-button.color = getConfig("homepage.cta.color");
-```
-
-Your code now no longer cares where the value comes from. It could be a hard-coded config value or part of an experiment.  This is the cleanest approach of the 3, but it can be difficult to debug if things go wrong.
+1.  Create a Growth Book API key - https://docs.growthbook.io/api
+2.  Periodically fetch the latest experiment list from the API and cache in your database
+3.  At the start of your app, run `client.experiments.push(...listFromDB)`

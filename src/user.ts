@@ -1,10 +1,8 @@
 import {
   UserAttributes,
   VariationData,
-  AnalyticsWindow,
-  ExperimentParams,
+  Experiment,
   ExperimentResults,
-  ExperimentData,
   DataLookupResults,
 } from './types';
 import {
@@ -12,6 +10,8 @@ import {
   getWeightsFromOptions,
   chooseVariation,
   getQueryStringOverride,
+  applyDomMods,
+  urlIsValid,
 } from './util';
 import GrowthBookClient from 'client';
 
@@ -37,15 +37,7 @@ export default class GrowthBookUser {
     this.experimentsTracked = new Set();
     this.attributeMap = new Map();
     this.updateAttributeMap();
-  }
-
-  setId(id: string) {
-    this.id = id;
-    return this;
-  }
-  setAnonId(id: string) {
-    this.anonId = id;
-    return this;
+    this.runAutoExperiments();
   }
 
   setAttributes(attributes: UserAttributes, merge: boolean = false) {
@@ -59,129 +51,134 @@ export default class GrowthBookUser {
     return this;
   }
 
-  experiment(id: string, options?: ExperimentParams): ExperimentResults {
-    const notInTest: ExperimentResults = {
-      experiment: id,
-      variation: -1,
-      data: this.getVariationData(id, -1, options),
-    };
+  runAutoExperiments() {
+    // Only in browser environment
+    if(typeof window === "undefined") return;
 
-    // If experiments are disabled globally
-    if (!this.client.config.enabled) {
-      return notInTest;
-    }
-
-    // If querystring override is enabled
-    if (this.client.config.enableQueryStringOverride) {
-      let override = getQueryStringOverride(id);
-      if (override !== null) {
-        return {
-          experiment: id,
-          variation: override,
-          data: this.getVariationData(id, override, options),
-        };
+    this.client.experiments.forEach(exp => {
+      // Must be marked as auto, targeting based on url, and have variation info
+      if(exp.auto && exp.url && exp.variationInfo) {
+        // Must define either dom or css changes for at least 1 variation
+        if(exp.variationInfo.filter(v=>v.dom || v.css).length > 0) {
+          // Put user in experiment and apply any dom/css mods
+          const {apply} = this.experiment(exp);
+          apply();
+        }
       }
-    }
+    });
+  }
 
-    // If experiment settings are overridden in config
-    if (!options) options = {};
-    let optionsClone = { ...options };
-    if (this.client.experiments && id in this.client.experiments) {
-      // Value is forced, return immediately
-      const { ...overrides } = this.client.experiments[id];
-      Object.assign(optionsClone, overrides);
-    }
+  private isIncluded(experiment: Experiment): boolean {
+    if(experiment.variations < 2) return false;
 
-    // Require the number of variations to be set
-    if (!optionsClone.variations) {
-      return notInTest;
-    }
+    if(experiment.status === "draft") return false;
 
     // Missing required type of user id
-    const userId = optionsClone?.anon ? this.anonId : this.id;
+    const userId = experiment?.anon ? this.anonId : this.id;
     if (!userId) {
-      return notInTest;
+      return false;
     }
 
     // Experiment has targeting rules, check if user matches
-    if (optionsClone.targeting && !this.isTargeted(optionsClone.targeting)) {
-      return notInTest;
+    if (experiment.targeting && !this.isTargeted(experiment.targeting)) {
+      return false;
+    }
+
+    // URL targeting
+    if (experiment.url && !urlIsValid(experiment.url, this.client)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private getExperimentResults(experiment?: Experiment, variation: number = -1): ExperimentResults {
+    return {
+      variation,
+      experiment,
+      data: experiment ? this.getVariationData(experiment, variation) : undefined,
+      apply: variation >= 0 ? () => {
+        const info = experiment?.variationInfo?.[variation];
+        if(info && (info.dom || info.css)) {
+          applyDomMods({
+            dom: info.dom,
+            css: info.css
+          });
+        }
+      }: () => {
+        // do nothing if not in experiment
+      }
+    };
+  }
+
+  experiment(experiment: string|Experiment): ExperimentResults {
+    if(typeof experiment === "string") {
+      experiment = this.client.experiments.filter(e=>e.key===experiment)[0];
+      if(!experiment) {
+        return this.getExperimentResults();
+      }
+    }
+
+    // Experiments turned off globally
+    if(!this.client.config.enabled) return this.getExperimentResults(experiment);
+
+    // If querystring override is enabled
+    if (this.client.config.enableQueryStringOverride) {
+      let override = getQueryStringOverride(experiment.key, this.client);
+      if (override !== null) {
+        return this.getExperimentResults(experiment, override);
+      }
+    }
+
+    if(!this.isIncluded(experiment)) {
+      return this.getExperimentResults(experiment);
     }
 
     // Experiment variation is forced
-    if (optionsClone.force !== undefined && optionsClone.force !== null) {
-      return {
-        experiment: id,
-        variation: optionsClone.force,
-        data: this.getVariationData(id, optionsClone.force, options),
-      };
+    if (experiment.force !== undefined && experiment.force !== null) {
+      return this.getExperimentResults(experiment, experiment.force);
     }
 
-    const weights = getWeightsFromOptions(optionsClone);
+    const weights = getWeightsFromOptions(experiment);
+
+    const userId = experiment?.anon ? this.anonId : this.id;
 
     // Hash unique id and experiment id to randomly choose a variation given weights
-    const variation = chooseVariation(userId, id, weights);
-    const variationData = this.getVariationData(id, variation, options);
-    this.trackView(id, variation, userId, optionsClone.anon, variationData);
+    const variation = chooseVariation(userId, experiment.key, weights);
+    this.trackView(experiment, variation, userId, experiment.anon);
 
-    return {
-      experiment: id,
-      variation,
-      data: variationData,
-    };
+    return this.getExperimentResults(experiment, variation);
   }
 
   lookupByDataKey(key: string): DataLookupResults {
     if (this.client.experiments) {
-      const ids = Object.keys(this.client.experiments);
-      for (let i = 0; i < ids.length; i++) {
-        const id = ids[i];
-        const exp = this.client.experiments[id];
-
-        if (exp.data && exp.data[key]) {
-          const ret = this.experiment(id);
-          if (ret.variation >= 0) {
+      for (let i = 0; i < this.client.experiments.length; i++) {
+        const exp = this.client.experiments[i];
+        if(exp.variationInfo && exp.variationInfo.filter(v=>v.data && v.data[key]).length>0) {
+          const ret = this.experiment(exp);
+          if(ret.variation >= 0) {
             return {
-              experiment: id,
+              experiment: exp,
               variation: ret.variation,
-              value: ret.data[key],
-            };
+              value: ret.data?.[key],
+            }
           }
         }
       }
     }
 
-    return {
-      experiment: undefined,
-      variation: undefined,
-      value: undefined,
-    };
+    return {};
   }
 
   private getVariationData(
-    experiment: string,
-    variation: number,
-    inlineOptions?: ExperimentParams
+    experiment: Experiment,
+    variation: number
   ): VariationData {
-    let data: ExperimentData = {};
-
-    if (this.client.experiments && experiment in this.client.experiments) {
-      const override = this.client.experiments[experiment].data;
-      if (override) {
-        data = override;
-      }
+    if(experiment.variationInfo?.[variation]) {
+      return experiment.variationInfo[variation].data || {};
     }
-
-    if (inlineOptions && inlineOptions.data) {
-      data = inlineOptions.data;
-    }
-
-    const variationData: VariationData = {};
-    Object.keys(data).forEach(k => {
-      variationData[k] = data[k][variation] || data[k][0];
-    });
-
-    return variationData;
+    // Fall back to using the data from control
+    return experiment.variationInfo?.[0]?.data || {}
   }
 
   private isTargeted(rules: string[]): boolean {
@@ -220,44 +217,23 @@ export default class GrowthBookUser {
   }
 
   private trackView(
-    experiment: string,
+    experiment: Experiment,
     variation: number,
-    userId?: string,
-    anon?: boolean,
-    data?: VariationData
+    userId: string,
+    anon?: boolean
   ) {
     // Only track an experiment once per user/test
-    if (variation !== -1 && !this.experimentsTracked.has(userId + experiment)) {
-      this.experimentsTracked.add(userId + experiment);
+    if (variation !== -1 && !this.experimentsTracked.has(userId + experiment.key)) {
+      this.experimentsTracked.add(userId + experiment.key);
 
-      if (typeof window !== 'undefined') {
-        const w = window as AnalyticsWindow;
-        if (this.client.config.segment) {
-          const t = w?.analytics?.track;
-          if (t) {
-            t('Experiment Viewed', {
-              experiment_id: experiment,
-              variation_id: variation,
-            });
-          }
-        }
-        if (this.client.config.ga) {
-          const g = w?.ga;
-          if (g && typeof g === 'function') {
-            g(
-              'set',
-              `dimension${this.client.config.ga}`,
-              experiment + ':' + variation
-            );
-            g('send', 'event', 'experiment', experiment, variation + '');
-          }
-        }
-      }
       if (this.client.config.onExperimentViewed) {
+        const variationKey = experiment.variationInfo?.[variation]?.key || ""+variation;
+
         this.client.config.onExperimentViewed({
           experiment,
           variation,
-          data,
+          variationKey,
+          data: this.getVariationData(experiment, variation),
           [anon ? 'anonId' : 'userId']: userId,
           userAttributes: this.attributes,
         });

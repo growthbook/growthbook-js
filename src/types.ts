@@ -10,50 +10,79 @@ export interface VariationData {
 
 export type UserArg =
   | {
-      anonId: string;
-      id?: string;
-      attributes?: UserAttributes;
-    }
+    anonId: string;
+    id?: string;
+    attributes?: UserAttributes;
+  }
   | {
-      anonId?: string;
-      id: string;
-      attributes?: UserAttributes;
-    };
+    anonId?: string;
+    id: string;
+    attributes?: UserAttributes;
+  };
 
 export interface ExperimentResults {
-  experiment: string;
   variation: number;
-  data: VariationData;
+  experiment?: Experiment;
+  data?: VariationData;
+  apply: () => void;
 }
 
 export interface DataLookupResults {
-  experiment?: string;
+  experiment?: Experiment;
   variation?: number;
   value?: unknown;
-  data?: VariationData;
 }
 
-export interface ExperimentParams {
-  variations?: number;
-  weights?: number[];
+export type DomChangeMethod =
+  | "addClass"
+  | "removeClass"
+  | "appendHTML"
+  | "setHTML"
+  | "setAttribute";
+
+export interface DomChange {
+  selector: string;
+  mutation: DomChangeMethod;
+  value: string;
+};
+
+export interface VariationInfo {
+  key?: string;
+  weight?: number;
+  data?: {
+    [key: string]: unknown;
+  };
+  dom?: DomChange[];
+  css?: string;
+}
+
+export interface Experiment {
+  key: string;
+  variations: number;
+  variationInfo?: VariationInfo[];
+  auto?: boolean;
+  anon?: boolean;
+  status?: "draft" | "running" | "stopped";
+  force?: number;
   coverage?: number;
   targeting?: string[];
-  anon?: boolean;
-  data?: ExperimentData;
-  force?: number;
-}
-
-export interface ExperimentsConfig {
-  [key: string]: ExperimentParams;
-}
+  url?: string;
+  // @deprecated
+  //weights?: number[];
+  // @deprecated
+  //data?: { [key: string]: unknown[] };
+};
 
 export type TrackExperimentFunctionProps = {
-  experiment: string;
+  experiment: Experiment;
   variation: number;
+  variationKey: string;
   userId?: string;
   anonId?: string;
   data?: VariationData;
   userAttributes?: UserAttributes;
+  dom?: DomChange[];
+  css?: string;
 };
 
 export type TrackExperimentFunction = (
@@ -62,22 +91,7 @@ export type TrackExperimentFunction = (
 
 export interface ClientConfigInterface {
   enabled?: boolean;
+  url?: string;
   onExperimentViewed?: TrackExperimentFunction;
   enableQueryStringOverride?: boolean;
-  segment?: boolean;
-  ga?: number;
 }
-
-export type AnalyticsWindow = typeof window & {
-  analytics?: {
-    track?: (event: string, props: any) => void;
-  };
-  ga?: (
-    func: string,
-    event: string,
-    category: string,
-    action?: string,
-    label?: string,
-    value?: number
-  ) => void;
-};
