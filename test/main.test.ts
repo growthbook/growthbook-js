@@ -708,23 +708,17 @@ describe('experiments', () => {
 
     window.location.href = 'http://example.com/home';
     const newClient = new GrowthBookClient();
-    expect(newClient.config.url).toEqual(window.location.href);
     newClient.experiments.push(exp);
 
-    const user = newClient.user({ id: '1' });
-    expect(user.getActiveExperiments().length).toEqual(0);
+    newClient.user({ id: '1' });
     expect(value).toEqual(0);
 
     window.location.href = 'http://example.com/about';
     window.dispatchEvent(new PopStateEvent('popstate', {}));
-    expect(newClient.config.url).toEqual(window.location.href);
-    expect(user.getActiveExperiments().length).toEqual(1);
     expect(value).toEqual(1);
 
     window.location.href = 'http://example.com/pricing';
     window.dispatchEvent(new PopStateEvent('popstate', {}));
-    expect(newClient.config.url).toEqual(window.location.href);
-    expect(user.getActiveExperiments().length).toEqual(0);
     expect(value).toEqual(0);
 
     newClient.destroy();

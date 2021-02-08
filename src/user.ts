@@ -65,10 +65,6 @@ export default class GrowthBookUser {
     }
   }
 
-  getActiveExperiments() {
-    return this.activeExperiments;
-  }
-
   refreshActiveExperiments() {
     // Only in browser environment
     if (typeof window === 'undefined') return;
