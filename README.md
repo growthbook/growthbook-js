@@ -38,7 +38,7 @@ client.experiments.push({
 // Define the user that you want to run an experiment on
 const user = client.user({id: "12345"});
 
-// Run the experioment
+// Put the user in the experiment
 const {variation} = user.experiment("my-experiment");
 ```
 
@@ -59,10 +59,10 @@ There are a lot more configuration options you can specify.  Here is the full ty
 interface Experiment {
     // The globally unique tracking key for the experiment
     key: string;
-    // "draft" is only considered when forcing a variation via querystring (for QA)
-    status: "draft" | "running" | "stopped";
     // Number of variations including the control (always at least 2)
     variations: number;
+    // "draft" is only considered when forcing a variation via querystring (for QA)
+    status: "draft" | "running" | "stopped";
     // What percent of users should be included in the experiment. Float from 0 to 1.
     coverage?: number;
     // Users can only be included in this experiment if the current URL matches this regex
@@ -95,6 +95,10 @@ interface Experiment {
             mutation: "addClass" | "removeClass" | "appendHTML" | "setHTML" | "setAttribute";
             value: string;
         }[];
+        // Callback function that is called when a user is assigned this variation
+        activate?: () => void;
+        // Cleanup function to undo any changes made in `activate`
+        deactivate?: () => void;
     }[];
     // If true, users who match all targeting rules should automatically be put into the test
     auto: boolean;
@@ -105,9 +109,61 @@ interface Experiment {
 
 There are 4 different ways to run experiments. You can use more than one of these at a time; choose what makes sense on a case-by-case basis.
 
-### 1. Code Branching (Browser and NodeJS)
+### 1. Automatic (Browser Only)
 
-This approach works with all experiments.  Here is the most basic example:
+With the Automatic approach, you put the variation code as part of the experiment definition.  Then, users who match the targeting rules will automatically be assigned a variation and run your code.
+
+If you are pulling the list of experiments from a database or API, that means you can start new experiments without any code deploys and avoid increasing tech debt.
+
+Requirements:
+-  Browser environment (NodeJS support is coming soon)
+-  Experiment must have `auto` set to true
+-  Experiment must set the `url` regex field (setting to `.*` is fine, it just can't be empty)
+-  Experiment must define `variationInfo`
+
+Here is an example experiment that meets these requirements:
+
+```ts
+client.experiments.push({
+    key: "my-automatic-experiment",
+    variations: 2,
+    auto: true,
+    url: "^/post/[0-9]+",
+    variationInfo: [
+        // Control (doesn't change the page at all)
+        {},
+        // Variation
+        {
+            dom: [
+                {
+                    selector: "h1",
+                    mutation: "setHTML",
+                    value: "My New Title"
+                }
+            ],
+            css: "h1 { color: red; }",
+            activate: () => {
+                // Arbitrary javascript
+                window.inTheVariation = true;
+            },
+            deactivate: () => {
+                // Undo whatever changes were made in `activate`
+                window.inTheVariation = false;
+            }
+        }
+    ]
+});
+```
+
+If the user lands on the url `/post/123`, they will be assigned a variation, any dom/css changes will be applied, and your `activate` function will be called if defined.
+
+In addition, we add a `popstate` listener.  If you have a SPA and the user navigates to a different URL that no longer matches the targeting rules, the dom/css changes will be reverted and the `deactivate` function will be called.
+
+The main downside of the automatic approach is that it can make debugging and QA more difficult.
+
+### 2. Code Branching (Browser and NodeJS)
+
+The Code Branching approach works with all experiments.  Here is the most basic example:
 
 ```ts
 client.experiments.push({
@@ -132,53 +188,9 @@ else if(variation === -1) {
 }
 ```
 
-### 2. Visual Editor (Browser Only)
-
-Code branching is easy to understand, but requires deploying new code for every experiment and adds to tech debt.
-
-Using the Visual Editor approach, you instead define the DOM mutations and/or CSS styles for each variation and they are applied automatically.
-
-All you need to do is add a new experiment to the client and users will automatically be assigned and shown a variation.
-
-If you are pulling the list of experiments from a database or API, that means you can start new experiments without any code deploys.
-
-Requirements:
--  Browser environment (NodeJS support is coming soon)
--  Experiment must have `auto` set to true
--  Experiment must set the `url` regex field (setting to `.*` is fine, it just can't be empty)
--  Experiment must define `variationInfo` with `dom` and/or `css` properties
-
-Here is an example experiment that meets these requirements:
-
-```ts
-client.experiments.push({
-    key: "my-visual-editor-experiment",
-    variations: 2,
-    auto: true,
-    url: "^/post/[0-9]+",
-    variationInfo: [
-        // Control
-        {
-            // No DOM or CSS changes for the control
-        },
-        // Variation
-        {
-            dom: [
-                {
-                    selector: "h1",
-                    mutation: "setHTML",
-                    value: "My New Title"
-                }
-            ],
-            css: "h1 { color: red; }"
-        }
-    ]
-})
-```
-
 ### 3. Parameterization (Browser and NodeJS)
 
-If the Visual Editor is not flexible enough and you don't want to add branching to your code, you can use Parameterization instead.
+You can use Parameterization as a cleaner alternative to code branching for simple experiments.
 
 Requirements:
 -  Experiment must define `variationInfo` with the `data` property
@@ -215,11 +227,11 @@ const buttonColor = data.color || "blue";
 
 ### 4. Feature Flags (Browser and NodeJS)
 
-Parameterization still requires referencing experiment keys directly in code, which adds to tech debt.  Using feature flags, you can get some of the same benefits while also keeping your code more maintainable.
+Parameterization still requires referencing experiment keys directly in code.  Using feature flags, you can get some of the same benefits while also keeping your code more maintainable.
 
 Requirements:
 -  Experiment must define `variationInfo` with the `data` property
--  Use more descriptive data keys (e.g. `homepage.button.color` instead of just `color`)
+-  Use more descriptive data keys (e.g. `homepage.signup.color` instead of just `color`)
 
 Here is an example experiment that meets these requirements:
 
@@ -231,13 +243,13 @@ client.experiments.push({
         // Control
         {
             data: {
-                "homepage.button.color": "blue"
+                "homepage.signup.color": "blue"
             }
         },
         // Variation
         {
             data: {
-                "homepage.button.color": "green"
+                "homepage.signup.color": "green"
             }
         }
     ]
@@ -257,7 +269,7 @@ function getFeatureFlag(key: string, defaultValue: any) {
     return defaultValue;
 }
 
-const buttonColor = getFeatureFlag("homepage.button.color", "blue");
+const buttonColor = getFeatureFlag("homepage.signup.color", "blue");
 ```
 
 ## Client Configuration

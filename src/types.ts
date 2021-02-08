@@ -10,21 +10,22 @@ export interface VariationData {
 
 export type UserArg =
   | {
-    anonId: string;
-    id?: string;
-    attributes?: UserAttributes;
-  }
+      anonId: string;
+      id?: string;
+      attributes?: UserAttributes;
+    }
   | {
-    anonId?: string;
-    id: string;
-    attributes?: UserAttributes;
-  };
+      anonId?: string;
+      id: string;
+      attributes?: UserAttributes;
+    };
 
 export interface ExperimentResults {
   variation: number;
   experiment?: Experiment;
   data?: VariationData;
-  apply: () => void;
+  activate: () => void;
+  deactivate: () => void;
 }
 
 export interface DataLookupResults {
@@ -34,17 +35,17 @@ export interface DataLookupResults {
 }
 
 export type DomChangeMethod =
-  | "addClass"
-  | "removeClass"
-  | "appendHTML"
-  | "setHTML"
-  | "setAttribute";
+  | 'addClass'
+  | 'removeClass'
+  | 'appendHTML'
+  | 'setHTML'
+  | 'setAttribute';
 
 export interface DomChange {
   selector: string;
   mutation: DomChangeMethod;
   value: string;
-};
+}
 
 export interface VariationInfo {
   key?: string;
@@ -54,6 +55,8 @@ export interface VariationInfo {
   };
   dom?: DomChange[];
   css?: string;
+  activate?: () => void;
+  deactivate?: () => void;
 }
 
 export interface Experiment {
@@ -62,16 +65,12 @@ export interface Experiment {
   variationInfo?: VariationInfo[];
   auto?: boolean;
   anon?: boolean;
-  status?: "draft" | "running" | "stopped";
+  status?: 'draft' | 'running' | 'stopped';
   force?: number;
   coverage?: number;
   targeting?: string[];
   url?: string;
-  // @deprecated
-  //weights?: number[];
-  // @deprecated
-  //data?: { [key: string]: unknown[] };
-};
+}
 
 export type TrackExperimentFunctionProps = {
   experiment: Experiment;

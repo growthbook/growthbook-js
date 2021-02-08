@@ -69,23 +69,23 @@ export function chooseVariation(
   return -1;
 }
 
-export function urlIsValid(urlRegex: string, client: GrowthBookClient): boolean {
+export function urlIsValid(
+  urlRegex: string,
+  client: GrowthBookClient
+): boolean {
   const escaped = urlRegex.replace(/([^\\])\//g, '$1\\/');
 
   const url = client.config.url;
-  if(!url) return false;
+  if (!url) return false;
 
-  const pathOnly = url
-    .replace(/^https?:\/\//,'')
-    .replace(/^[^/]*\//,'/');
+  const pathOnly = url.replace(/^https?:\/\//, '').replace(/^[^/]*\//, '/');
 
   try {
     const regex = new RegExp(escaped);
-    if(regex.test(url)) return true;
-    if(regex.test(pathOnly)) return true;
+    if (regex.test(url)) return true;
+    if (regex.test(pathOnly)) return true;
     return false;
-  }
-  catch(e) {
+  } catch (e) {
     return false;
   }
 }
@@ -97,13 +97,13 @@ export function getQueryStringOverride(id: string, client: GrowthBookClient) {
     return null;
   }
 
-  const search = url.split("?")[1];
+  const search = url.split('?')[1];
   if (!search) {
     return null;
   }
 
   const match = search
-    .replace(/#.*/, "") // Get rid of anchor
+    .replace(/#.*/, '') // Get rid of anchor
     .split('&') // Split into key/value pairs
     .map(kv => kv.split('=', 2))
     .filter(([k]) => k === id) // Look for key that matches the experiment id
@@ -118,74 +118,125 @@ const appliedDomChanges = new Set();
 export function clearAppliedDomChanges() {
   appliedDomChanges.clear();
 }
-export function applyDomMods({ dom, css }: { dom?: DomChange[], css?: string }) {
+
+export function applyDomMods({
+  dom,
+  css,
+}: {
+  dom?: DomChange[];
+  css?: string;
+}): () => void {
+  const noop = () => {
+    // Do nothing
+  };
+
   // Only works on a browser environment
-  if (typeof window === "undefined") {
-    return;
+  if (typeof window === 'undefined') {
+    return noop;
   }
 
-  function runMods() {
+  function runMods(): () => void {
+    let revert: (() => void)[] = [];
+
     if (dom) {
       dom.forEach(({ selector, mutation, value }) => {
         // Make sure we're only applying DOM changes once
-        const key = selector+"__"+mutation+"__"+value;
-        if(appliedDomChanges.has(key)) {
+        const key = selector + '__' + mutation + '__' + value;
+        if (appliedDomChanges.has(key)) {
           return;
         }
         appliedDomChanges.add(key);
 
         const nodes = document.querySelectorAll(selector);
         nodes.forEach(el => {
-          switch (mutation) {
-            case "addClass":
-              return value.split(/[\s.]+/).filter(Boolean).forEach(className => {
-                el.classList.add(className);
-              })
-            case "removeClass":
-              return value.split(/[\s.]+/).filter(Boolean).forEach(className => {
-                el.classList.remove(className);
-              })
-            case "appendHTML":
-              return el.innerHTML += value;
-            case "setHTML":
-              return el.innerHTML = value;
-            case "setAttribute":
-              let [attr, val] = value.split("=");
-              attr = attr.trim();
-              val = val.trim().replace(/(^"|"$)/g, "");
+          const cl = el.classList;
+          if (mutation === 'addClass') {
+            const classes = value.split(/[\s.]+/).filter(Boolean);
 
-              if (attr && val) {
-                el.setAttribute(attr, val);
-              }
-              return;
+            classes.forEach(c => cl.add(c));
+            revert.push(() => {
+              classes.forEach(c => cl.remove(c));
+            });
+          } else if (mutation === 'removeClass') {
+            const classes = value.split(/[\s.]+/).filter(Boolean);
+
+            classes.forEach(c => cl.remove(c));
+            revert.push(() => {
+              classes.forEach(c => cl.add(c));
+            });
+          } else if (mutation === 'appendHTML') {
+            const current = el.innerHTML;
+            el.innerHTML += value;
+            revert.push(() => (el.innerHTML = current));
+          } else if (mutation === 'setHTML') {
+            const current = el.innerHTML;
+            el.innerHTML = value;
+            revert.push(() => (el.innerHTML = current));
+          } else if (mutation === 'setAttribute') {
+            let [attr, val] = value.split('=');
+            attr = attr.trim();
+            val = val.trim().replace(/(^"|"$)/g, '');
+
+            if (attr && val) {
+              const current = el.getAttribute(attr);
+              el.setAttribute(attr, val);
+              revert.push(() =>
+                current === null
+                  ? el.removeAttribute(attr)
+                  : el.setAttribute(attr, current)
+              );
+            }
           }
         });
       });
     }
     if (css) {
       // Make sure we're only applying CSS changes once
-      if(appliedDomChanges.has(css)) {
-        return;
+      if (!appliedDomChanges.has(css)) {
+        appliedDomChanges.add(css);
+
+        const style = document.createElement('style');
+        document.head.appendChild(style);
+        style.innerHTML = css;
+
+        revert.push(() => {
+          style.remove();
+          appliedDomChanges.delete(css);
+        });
       }
-      appliedDomChanges.add(css);
-
-      const style = document.createElement("style");
-      document.head.appendChild(style);
-      style.innerHTML = css;
     }
+
+    revert.reverse();
+    return () => {
+      revert.forEach(f => f());
+    };
   }
 
-  if (document.readyState === "interactive" || document.readyState === "complete") {
-    runMods();
-  }
-  else {
+  if (
+    document.readyState === 'interactive' ||
+    document.readyState === 'complete'
+  ) {
+    return runMods();
+  } else {
+    let revert: () => void;
     const listener = () => {
-      if (document.readyState === 'interactive' || document.readyState === "complete") {
+      if (
+        document.readyState === 'interactive' ||
+        document.readyState === 'complete'
+      ) {
         document.removeEventListener('readystatechange', listener);
-        runMods();
+        revert = runMods();
       }
     };
     document.addEventListener('readystatechange', listener);
+
+    return () => {
+      if (revert) {
+        revert();
+      } else {
+        document.removeEventListener('readystatechange', listener);
+      }
+    };
   }
 }
 
@@ -200,7 +251,8 @@ export function getWeightsFromOptions(experiment: Experiment) {
   }
 
   // Full coverage by default
-  let coverage = typeof experiment.coverage === 'undefined' ? 1 : experiment.coverage;
+  let coverage =
+    typeof experiment.coverage === 'undefined' ? 1 : experiment.coverage;
   if (coverage < 0 || coverage > 1) {
     if (process.env.NODE_ENV !== 'production') {
       console.error('Experiment coverage must be between 0 and 1 inclusive');
@@ -212,8 +264,12 @@ export function getWeightsFromOptions(experiment: Experiment) {
 
   // If wrong number of weights, or weights don't add up to 1 (or close to it), default to equal weights
   const totalWeight = weights.reduce((w, sum) => sum + w, 0);
-  if (weights.length !== variations || totalWeight < 0.99 || totalWeight > 1.01) {
-    weights = new Array(variations).fill(1 / variations)
+  if (
+    weights.length !== variations ||
+    totalWeight < 0.99 ||
+    totalWeight > 1.01
+  ) {
+    weights = new Array(variations).fill(1 / variations);
   }
 
   // Scale weights by traffic coverage
