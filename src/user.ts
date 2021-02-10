@@ -69,15 +69,22 @@ export default class GrowthBookUser {
     // Only in browser environment
     if (typeof window === 'undefined') return;
 
+    this.log('Refreshing active experiments');
+
     // First see if any currently active experiments need to be deactivated
     const activeIds: Set<string> = new Set();
+    const deactivatedIds: Set<string> = new Set();
     this.activeExperiments.forEach(res => {
       if (!res.experiment || res.variation === -1) return;
 
       const newRes = this.experiment(res.experiment);
       if (newRes.variation === -1) {
+        this.log(
+          'No longer in experiment ' + res.experiment.key + ', deactivating'
+        );
         // Remove any dom/css changes and remove from active list
         res.deactivate();
+        deactivatedIds.add(res.experiment.key);
       } else {
         activeIds.add(res.experiment.key);
       }
@@ -85,8 +92,9 @@ export default class GrowthBookUser {
 
     // Then, add in any new experiments
     this.client.experiments.forEach(exp => {
-      // Skip ones that have already been activated
+      // Skip ones that have already been activated or were just deactivated
       if (activeIds.has(exp.key)) return;
+      if (deactivatedIds.has(exp.key)) return;
 
       // Must be marked as auto, targeting based on url, and have variation info
       if (!exp.auto || !exp.url || !exp.variationInfo) return;
@@ -97,24 +105,53 @@ export default class GrowthBookUser {
     });
   }
 
-  private isIncluded(experiment: Experiment): boolean {
-    if (experiment.variations < 2) return false;
+  private log(msg: string) {
+    if (this.client.config.debug) {
+      console.log(msg, {
+        userId: this.id,
+        anonId: this.anonId,
+      });
+    }
+  }
 
-    if (experiment.status === 'draft') return false;
+  private isIncluded(experiment: Experiment): boolean {
+    if (experiment.variations < 2) {
+      this.log(
+        'variations must be at least 2, but only set to ' +
+          experiment.variations
+      );
+      return false;
+    }
+
+    if (experiment.status === 'draft') {
+      this.log('experiment in draft mode');
+      return false;
+    }
 
     // Missing required type of user id
     const userId = experiment?.anon ? this.anonId : this.id;
     if (!userId) {
+      this.log(
+        'experiment requires ' +
+          (experiment?.anon ? 'anonId' : 'userId') +
+          ' to be set'
+      );
       return false;
     }
 
     // Experiment has targeting rules, check if user matches
     if (experiment.targeting && !this.isTargeted(experiment.targeting)) {
+      this.log('failed experiment targeting rules');
       return false;
     }
 
     // URL targeting
     if (experiment.url && !urlIsValid(experiment.url, this.client)) {
+      this.log(
+        'current url (' +
+          this.client.config.url +
+          ') does not match experiment url targeting'
+      );
       return false;
     }
 
@@ -145,9 +182,13 @@ export default class GrowthBookUser {
               const info = experiment?.variationInfo?.[variation];
 
               if (info?.activate) {
+                this.log(
+                  'Running custom activate function for ' + experiment?.key
+                );
                 info.activate();
               }
               if (info?.dom || info?.css) {
+                this.log('Applying DOM/css mods for ' + experiment?.key);
                 revert = applyDomMods({
                   dom: info.dom,
                   css: info.css,
@@ -159,11 +200,17 @@ export default class GrowthBookUser {
             },
       deactivate: () => {
         // Unapply dom/css changes
-        revert && revert();
+        if (revert) {
+          this.log('Reverting DOM/css changes for ' + experiment?.key);
+          revert();
+        }
 
         // Undo custom changes
         const deactivate = experiment?.variationInfo?.[variation]?.deactivate;
-        deactivate && deactivate();
+        if (deactivate) {
+          this.log('Running custom deactivate function for ' + experiment?.key);
+          deactivate();
+        }
 
         // Remove from active list
         const index = this.activeExperiments.indexOf(res);
@@ -177,14 +224,21 @@ export default class GrowthBookUser {
 
   experiment(experiment: string | Experiment): ExperimentResults {
     if (typeof experiment === 'string') {
+      const id = experiment;
       experiment = this.client.experiments.filter(e => e.key === experiment)[0];
       if (!experiment) {
+        this.log(
+          'Tried to put user in experiment ' + id + ', but experiment not found'
+        );
         return this.getExperimentResults();
       }
     }
 
+    this.log('Trying to put user in experiment ' + experiment.key);
+
     // Experiments turned off globally
     if (!this.client.config.enabled) {
+      this.log('client.enabled set to false, assigning variation -1');
       return this.getExperimentResults(experiment);
     }
 
@@ -192,16 +246,21 @@ export default class GrowthBookUser {
     if (this.client.config.enableQueryStringOverride) {
       let override = getQueryStringOverride(experiment.key, this.client);
       if (override !== null) {
+        this.log(
+          'querystring override is present, assigning variation ' + override
+        );
         return this.getExperimentResults(experiment, override);
       }
     }
 
     if (!this.isIncluded(experiment)) {
+      this.log('not included in experiment, assigning variation -1');
       return this.getExperimentResults(experiment);
     }
 
     // Experiment variation is forced
     if (experiment.force !== undefined && experiment.force !== null) {
+      this.log('variation forced to ' + experiment.force);
       return this.getExperimentResults(experiment, experiment.force);
     }
 
@@ -213,10 +272,14 @@ export default class GrowthBookUser {
     const variation = chooseVariation(userId, experiment.key, weights);
     this.trackView(experiment, variation, userId, experiment.anon);
 
+    this.log('user put in experiment, assigned variation ' + variation);
+
     return this.getExperimentResults(experiment, variation);
   }
 
   lookupByDataKey(key: string): DataLookupResults {
+    this.log('Looking up experiments that define data for ' + key);
+
     if (this.client.experiments) {
       for (let i = 0; i < this.client.experiments.length; i++) {
         const exp = this.client.experiments[i];
@@ -226,6 +289,12 @@ export default class GrowthBookUser {
         ) {
           const ret = this.experiment(exp);
           if (ret.variation >= 0) {
+            this.log(
+              'Experiment found, put in variation ' +
+                ret.variation +
+                ' with data value ' +
+                ret.data?.[key]
+            );
             return {
               experiment: exp,
               variation: ret.variation,
@@ -235,6 +304,8 @@ export default class GrowthBookUser {
         }
       }
     }
+
+    this.log('No experiments found');
 
     return {};
   }

@@ -1,5 +1,6 @@
 import GrowthBookClient from './client';
 import { Experiment, DomChange } from 'types';
+import mutate from 'dom-mutator';
 
 export function hashFnv32a(str: string): number {
   let hval = 0x811c9dc5;
@@ -126,118 +127,49 @@ export function applyDomMods({
   dom?: DomChange[];
   css?: string;
 }): () => void {
-  const noop = () => {
-    // Do nothing
-  };
-
   // Only works on a browser environment
   if (typeof window === 'undefined') {
-    return noop;
+    return () => {
+      // do nothing
+    };
   }
 
-  function runMods(): () => void {
-    let revert: (() => void)[] = [];
+  const revert: (() => void)[] = [];
+  if (dom?.length) {
+    dom.forEach(({ selector, mutation, value }) => {
+      // Make sure we're only applying DOM changes once
+      const key = selector + '__' + mutation + '__' + value;
+      if (appliedDomChanges.has(key)) {
+        return;
+      }
+      appliedDomChanges.add(key);
 
-    if (dom) {
-      dom.forEach(({ selector, mutation, value }) => {
-        // Make sure we're only applying DOM changes once
-        const key = selector + '__' + mutation + '__' + value;
-        if (appliedDomChanges.has(key)) {
-          return;
-        }
-        appliedDomChanges.add(key);
+      // Run the mutation
+      revert.push(mutate(selector, mutation, value));
+      revert.push(() => {
+        appliedDomChanges.delete(key);
+      });
+    });
+  }
+  if (css?.length) {
+    // Make sure we're only applying CSS changes once
+    if (!appliedDomChanges.has(css)) {
+      appliedDomChanges.add(css);
 
-        const nodes = document.querySelectorAll(selector);
-        nodes.forEach(el => {
-          const cl = el.classList;
-          if (mutation === 'addClass') {
-            const classes = value.split(/[\s.]+/).filter(Boolean);
+      const style = document.createElement('style');
+      document.head.appendChild(style);
+      style.innerHTML = css;
 
-            classes.forEach(c => cl.add(c));
-            revert.push(() => {
-              classes.forEach(c => cl.remove(c));
-            });
-          } else if (mutation === 'removeClass') {
-            const classes = value.split(/[\s.]+/).filter(Boolean);
-
-            classes.forEach(c => cl.remove(c));
-            revert.push(() => {
-              classes.forEach(c => cl.add(c));
-            });
-          } else if (mutation === 'appendHTML') {
-            const current = el.innerHTML;
-            el.innerHTML += value;
-            revert.push(() => (el.innerHTML = current));
-          } else if (mutation === 'setHTML') {
-            const current = el.innerHTML;
-            el.innerHTML = value;
-            revert.push(() => (el.innerHTML = current));
-          } else if (mutation === 'setAttribute') {
-            let [attr, val] = value.split('=');
-            attr = attr.trim();
-            val = val.trim().replace(/(^"|"$)/g, '');
-
-            if (attr && val) {
-              const current = el.getAttribute(attr);
-              el.setAttribute(attr, val);
-              revert.push(() =>
-                current === null
-                  ? el.removeAttribute(attr)
-                  : el.setAttribute(attr, current)
-              );
-            }
-          }
-        });
+      revert.push(() => {
+        style.remove();
+        appliedDomChanges.delete(css);
       });
     }
-    if (css) {
-      // Make sure we're only applying CSS changes once
-      if (!appliedDomChanges.has(css)) {
-        appliedDomChanges.add(css);
-
-        const style = document.createElement('style');
-        document.head.appendChild(style);
-        style.innerHTML = css;
-
-        revert.push(() => {
-          style.remove();
-          appliedDomChanges.delete(css);
-        });
-      }
-    }
-
-    revert.reverse();
-    return () => {
-      revert.forEach(f => f());
-    };
   }
 
-  if (
-    document.readyState === 'interactive' ||
-    document.readyState === 'complete'
-  ) {
-    return runMods();
-  } else {
-    let revert: () => void;
-    const listener = () => {
-      if (
-        document.readyState === 'interactive' ||
-        document.readyState === 'complete'
-      ) {
-        document.removeEventListener('readystatechange', listener);
-        revert = runMods();
-      }
-    };
-    document.addEventListener('readystatechange', listener);
-
-    return () => {
-      if (revert) {
-        revert();
-      } else {
-        document.removeEventListener('readystatechange', listener);
-      }
-    };
-  }
+  return () => {
+    revert.forEach(f => f());
+  };
 }
 
 export function getWeightsFromOptions(experiment: Experiment) {

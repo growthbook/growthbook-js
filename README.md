@@ -1,11 +1,11 @@
 # Growth Book Javascript Library
 
-![Build Status](https://github.com/growthbook/growthbook-js/workflows/Build/badge.svg)
-
 Small utility library to run controlled experiments (i.e. A/B/n tests) in javascript.
 
--  No dependencies
--  Lightweight and fast (2.7Kb gzipped)
+![Build Status](https://github.com/growthbook/growthbook-js/workflows/Build/badge.svg)
+
+-  No external dependencies
+-  Lightweight and fast (3Kb gzipped)
 -  No HTTP requests, everything is defined and evaluated locally
 -  Supports both browser and NodeJS environments
 -  Works with static pages, SPAs, React, and more
@@ -25,7 +25,7 @@ or use directly in your HTML without installing first:
 
 ```html
 <script type="module">
-import GrowthBookClient from 'https://unpkg.com/@growthbook/growthbook/dist/growthbook.esm.min.js';
+import GrowthBookClient from 'https://unpkg.com/@growthbook/growthbook/dist/growthbook.esm.min.js?module';
 //...
 </script>
 ```
@@ -285,6 +285,7 @@ The GrowthBookClient constructor takes an optional `options` argument.
 Below are all of the available options:
 
 -  **enabled** - Default true. Set to false to completely disable all experiments.
+-  **debug** - Default false. If set to true, console.log info about why experiments are run and why specific variations are chosen.
 -  **onExperimentViewed** - Callback when the user views an experiment. Passed an object with `experiment` and `variation` properties.
 -  **url** - The URL for the current request (defaults to `window.location.href` when in a browser)
 -  **enableQueryStringOverride** - Default false.  If true, enables forcing variations via the URL.  Very useful for QA.  https://example.com/?my-experiment=1

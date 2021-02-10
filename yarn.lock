@@ -2417,6 +2417,11 @@ doctrine@^3.0.0:
   dependencies:
     esutils "^2.0.2"
 
+dom-mutator@^0.2.1:
+  version "0.2.1"
+  resolved "https://registry.yarnpkg.com/dom-mutator/-/dom-mutator-0.2.1.tgz#624b85bd3293c3c829fc886644ca3ceefc39569d"
+  integrity sha512-ITt0xYLu9ztPV/SD3hLEMGD4GPTCO6YBOlZQW7CyKVjnULvWpkKHrI5/BXjzRuKC49M7+md4lErmh9EkO8V7tQ==
+
 domexception@^1.0.1:
   version "1.0.1"
   resolved "https://registry.yarnpkg.com/domexception/-/domexception-1.0.1.tgz#937442644ca6a31261ef36e3ec677fe805582c90"

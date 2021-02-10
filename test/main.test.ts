@@ -625,8 +625,10 @@ describe('experiments', () => {
     });
     client.config.url = 'http://www.example.com';
     document.body.innerHTML = '<h1>my title</h1>';
-    client.user({ id: '1' });
+    const user = client.user({ id: '1' });
     expect(document.querySelector('h1')?.innerHTML).toEqual('hello world');
+    user.destroy();
+    expect(document.querySelector('h1')?.innerHTML).toEqual('my title');
   });
 
   it('does not reapply the same change', () => {
@@ -650,7 +652,7 @@ describe('experiments', () => {
     document.head.innerHTML = '';
     document.body.innerHTML = '<h1>hello</h1>';
     const user = client.user({ id: '1' });
-    const { activate } = user.experiment(exp);
+    const { activate, deactivate } = user.experiment(exp);
 
     activate();
     activate();
@@ -658,6 +660,10 @@ describe('experiments', () => {
 
     expect(document.querySelector('h1')?.innerHTML).toEqual('hello world');
     expect(document.head.innerHTML).toEqual('<style>body{color:red}</style>');
+
+    deactivate();
+    expect(document.head.innerHTML).toEqual('');
+    expect(document.body.innerHTML).toEqual('<h1>hello</h1>');
   });
 
   it('runs custom activate/deactivate function', () => {

@@ -15,10 +15,7 @@ export default class GrowthBookClient {
     };
 
     this.onPopState = () => {
-      this.config.url = window.location.href;
-      this.users.forEach(user => {
-        user.refreshActiveExperiments();
-      });
+      this.setUrl(window.location.href);
     };
 
     if (
@@ -29,6 +26,13 @@ export default class GrowthBookClient {
       this.config.url = window.location.href;
       window.addEventListener('popstate', this.onPopState);
     }
+  }
+
+  setUrl(url: string) {
+    this.config.url = url;
+    this.users.forEach(user => {
+      user.refreshActiveExperiments();
+    });
   }
 
   user({ anonId, id, attributes }: UserArg): GrowthBookUser {

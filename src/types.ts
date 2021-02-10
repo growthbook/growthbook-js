@@ -91,6 +91,7 @@ export type TrackExperimentFunction = (
 export interface ClientConfigInterface {
   enabled?: boolean;
   url?: string;
+  debug?: boolean;
   onExperimentViewed?: TrackExperimentFunction;
   enableQueryStringOverride?: boolean;
 }
