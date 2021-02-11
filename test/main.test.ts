@@ -56,7 +56,7 @@ describe('experiments', () => {
   it('client has default options', () => {
     const newClient = new GrowthBookClient();
     expect(newClient.config.enabled).toEqual(true);
-    expect(!!newClient.config.enableQueryStringOverride).toEqual(false);
+    expect(!!newClient.config.enableQueryStringOverride).toEqual(true);
     expect(!!newClient.config.onExperimentViewed).toEqual(false);
   });
 

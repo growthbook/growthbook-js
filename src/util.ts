@@ -1,6 +1,6 @@
 import GrowthBookClient from './client';
 import { Experiment, DomChange } from 'types';
-import mutate from 'dom-mutator';
+import mutate from './dom-mutator';
 
 export function hashFnv32a(str: string): number {
   let hval = 0x811c9dc5;

@@ -11,6 +11,7 @@ export default class GrowthBookClient {
   constructor(config: Partial<ClientConfigInterface> = {}) {
     this.config = {
       enabled: true,
+      enableQueryStringOverride: true,
       ...config,
     };
 
