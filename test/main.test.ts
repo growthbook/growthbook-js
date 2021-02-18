@@ -7,6 +7,10 @@ import {
 import GrowthBookClient from '../src';
 import { Experiment, UserAttributes } from '../src/types';
 
+function sleep(ms = 20) {
+  return new Promise(res => setTimeout(res, ms));
+}
+
 const client = new GrowthBookClient();
 
 const chooseVariation = (
@@ -43,21 +47,28 @@ describe('experiments', () => {
   beforeEach(() => {
     // Reset growthbook configuration
     client.config.enableQueryStringOverride = false;
-    client.config.enabled = true;
+    client.enable();
     client.config.onExperimentViewed = undefined;
     client.config.url = '';
     client.experiments = [];
+    client.users.forEach(user => {
+      user.destroy();
+    })
     client.users = [];
     clearAppliedDomChanges();
     document.head.innerHTML = '';
     document.body.innerHTML = '';
   });
+  afterAll(() => {
+    client.destroy();
+  });
 
   it('client has default options', () => {
     const newClient = new GrowthBookClient();
-    expect(newClient.config.enabled).toEqual(true);
+    expect(newClient.isEnabled()).toEqual(true);
     expect(!!newClient.config.enableQueryStringOverride).toEqual(true);
     expect(!!newClient.config.onExperimentViewed).toEqual(false);
+    newClient.destroy();
   });
 
   it('missing variations', () => {
@@ -425,7 +436,7 @@ describe('experiments', () => {
 
   it('experiments disabled', () => {
     const mock = mockCallback();
-    client.config.enabled = false;
+    client.disable();
 
     expect(
       chooseVariation('1', { key: 'disabled-test', variations: 2 })
@@ -518,7 +529,7 @@ describe('experiments', () => {
     expect(chooseVariation('1', exp)).toEqual(1);
   });
 
-  it('applies dom changes', () => {
+  it('applies dom changes', async () => {
     client.experiments.push({
       key: 'my-test',
       variations: 2,
@@ -565,10 +576,12 @@ describe('experiments', () => {
     expect(variation).toEqual(1);
     expect(el?.innerHTML).toEqual('my title');
     activate();
+    await sleep();
     expect(el?.innerHTML).toEqual('hello world');
     expect(el?.getAttribute('class')).toEqual('second new');
     expect(el?.getAttribute('title')).toEqual('hello');
     deactivate();
+    await sleep();
     expect(document.body.innerHTML).toEqual(initial);
   });
 
@@ -604,7 +617,7 @@ describe('experiments', () => {
     expect(document.head.innerHTML).toEqual('');
   });
 
-  it('auto runs tests', () => {
+  it('auto runs tests', async () => {
     client.experiments.push({
       key: 'my-test',
       variations: 2,
@@ -626,12 +639,14 @@ describe('experiments', () => {
     client.config.url = 'http://www.example.com';
     document.body.innerHTML = '<h1>my title</h1>';
     const user = client.user({ id: '1' });
+    await sleep();
     expect(document.querySelector('h1')?.innerHTML).toEqual('hello world');
     user.destroy();
+    await sleep();
     expect(document.querySelector('h1')?.innerHTML).toEqual('my title');
   });
 
-  it('does not reapply the same change', () => {
+  it('does not reapply the same change', async () => {
     const exp: Experiment = {
       key: 'my-test',
       variations: 2,
@@ -658,10 +673,12 @@ describe('experiments', () => {
     activate();
     activate();
 
+    await sleep();
     expect(document.querySelector('h1')?.innerHTML).toEqual('hello world');
     expect(document.head.innerHTML).toEqual('<style>body{color:red}</style>');
 
     deactivate();
+    await sleep();
     expect(document.head.innerHTML).toEqual('');
     expect(document.body.innerHTML).toEqual('<h1>hello</h1>');
   });
@@ -769,7 +786,7 @@ describe('experiments', () => {
     });
   });
 
-  it('configData lookup', () => {
+  it('feature flag lookup', () => {
     const expChrome = {
       key: 'button-color-size-chrome',
       variations: 2,
@@ -813,18 +830,21 @@ describe('experiments', () => {
     const user = client.user({ id: '1' });
 
     // No matches
-    expect(user.lookupByDataKey('button.unknown')).toEqual({});
+    expect(user.getFeatureFlag('button.unknown').value).toEqual(undefined);
+
+    // No matches with default value
+    expect(user.getFeatureFlag('button.unknown', 'default').value).toEqual('default');
 
     // First matching experiment
     user.setAttributes({
       browser: 'chrome',
     });
-    expect(user.lookupByDataKey('button.color')).toEqual({
+    expect(user.getFeatureFlag('button.color')).toEqual({
       experiment: expChrome,
       variation: 0,
       value: 'blue',
     });
-    expect(user.lookupByDataKey('button.size')).toEqual({
+    expect(user.getFeatureFlag('button.size')).toEqual({
       experiment: expChrome,
       variation: 0,
       value: 'small',
@@ -834,13 +854,20 @@ describe('experiments', () => {
     user.setAttributes({
       browser: 'safari',
     });
-    expect(user.lookupByDataKey('button.color')).toEqual({
+    expect(user.getFeatureFlag('button.color')).toEqual({
       experiment: expSafari,
       variation: 0,
       value: 'blue',
     });
 
     // Fallback undefined
-    expect(user.lookupByDataKey('button.size')).toEqual({});
+    expect(user.getFeatureFlag('button.size').value).toEqual(undefined);
+  });
+
+  it('responds to window.growthbook calls', () => {
+    window.growthbook.push("disable");
+    expect(client.isEnabled()).toEqual(false);
+    window.growthbook.push("enable");
+    expect(client.isEnabled()).toEqual(true);
   });
 });

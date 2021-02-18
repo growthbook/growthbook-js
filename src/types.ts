@@ -28,10 +28,10 @@ export interface ExperimentResults {
   deactivate: () => void;
 }
 
-export interface DataLookupResults {
+export interface DataLookupResults<T = unknown> {
   experiment?: Experiment;
   variation?: number;
-  value?: unknown;
+  value: T | undefined;
 }
 
 export type DomChangeMethod =
@@ -89,7 +89,6 @@ export type TrackExperimentFunction = (
 ) => void;
 
 export interface ClientConfigInterface {
-  enabled?: boolean;
   url?: string;
   debug?: boolean;
   onExperimentViewed?: TrackExperimentFunction;

@@ -53,10 +53,14 @@ export default class GrowthBookUser {
     return this;
   }
 
-  destroy() {
+  deactivateAllExperiments() {
     // Deactivate any active experiments and cleanup for GC
     this.activeExperiments.forEach(exp => exp.deactivate());
     this.activeExperiments = [];
+  }
+
+  destroy() {
+    this.deactivateAllExperiments();
 
     // Remove user from client
     const index = this.client.users.indexOf(this);
@@ -237,8 +241,8 @@ export default class GrowthBookUser {
     this.log('Trying to put user in experiment ' + experiment.key);
 
     // Experiments turned off globally
-    if (!this.client.config.enabled) {
-      this.log('client.enabled set to false, assigning variation -1');
+    if (!this.client.isEnabled()) {
+      this.log('client is not enabled, assigning variation -1');
       return this.getExperimentResults(experiment);
     }
 
@@ -277,8 +281,21 @@ export default class GrowthBookUser {
     return this.getExperimentResults(experiment, variation);
   }
 
-  lookupByDataKey(key: string): DataLookupResults {
+  getFeatureFlag<T = any>(
+    key: string,
+    defaultValue: T | undefined = undefined
+  ): DataLookupResults<T> {
     this.log('Looking up experiments that define data for ' + key);
+
+    // Experiments turned off globally
+    if (!this.client.isEnabled()) {
+      this.log('client is not enabled, returning immediately');
+      return {
+        experiment: undefined,
+        variation: undefined,
+        value: defaultValue,
+      };
+    }
 
     if (this.client.experiments) {
       for (let i = 0; i < this.client.experiments.length; i++) {
@@ -289,25 +306,39 @@ export default class GrowthBookUser {
         ) {
           const ret = this.experiment(exp);
           if (ret.variation >= 0) {
-            this.log(
-              'Experiment found, put in variation ' +
-                ret.variation +
-                ' with data value ' +
-                ret.data?.[key]
-            );
-            return {
-              experiment: exp,
-              variation: ret.variation,
-              value: ret.data?.[key],
-            };
+            if (ret.data && key in ret.data) {
+              this.log('Using value from variation: ' + ret.data[key]);
+              return {
+                experiment: exp,
+                variation: ret.variation,
+                value: ret.data[key] as T,
+              };
+            } else {
+              this.log(
+                'No value defined for variation, using default value: ' +
+                  defaultValue
+              );
+              return {
+                experiment: exp,
+                variation: ret.variation,
+                value: defaultValue,
+              };
+            }
           }
         }
       }
     }
 
-    this.log('No experiments found');
+    this.log(
+      'No experiments found for the data key, returning default value: ' +
+        defaultValue
+    );
 
-    return {};
+    return {
+      experiment: undefined,
+      variation: undefined,
+      value: defaultValue,
+    };
   }
 
   private getVariationData(

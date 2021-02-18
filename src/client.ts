@@ -1,16 +1,21 @@
 import { ClientConfigInterface, UserArg, Experiment } from './types';
 import GrowthBookUser from './user';
 
+export const clients: Set<GrowthBookClient> = new Set();
+
 export default class GrowthBookClient {
   config: ClientConfigInterface;
   experiments: Experiment[] = [];
   users: GrowthBookUser[] = [];
 
+  private _enabled: boolean;
+
   private onPopState: () => void;
 
   constructor(config: Partial<ClientConfigInterface> = {}) {
+    this._enabled = true;
+
     this.config = {
-      enabled: true,
       enableQueryStringOverride: true,
       ...config,
     };
@@ -27,6 +32,23 @@ export default class GrowthBookClient {
       this.config.url = window.location.href;
       window.addEventListener('popstate', this.onPopState);
     }
+
+    clients.add(this);
+  }
+
+  isEnabled() {
+    return this._enabled;
+  }
+
+  enable() {
+    this._enabled = true;
+  }
+
+  disable() {
+    this._enabled = false;
+    this.users.forEach(user => {
+      user.deactivateAllExperiments();
+    });
   }
 
   setUrl(url: string) {
@@ -56,5 +78,9 @@ export default class GrowthBookClient {
     });
     this.users = [];
     this.experiments = [];
+    this._enabled = false;
+
+    // Remove from clients set
+    clients.delete(this);
   }
 }
