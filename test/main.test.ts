@@ -53,7 +53,7 @@ describe('experiments', () => {
     client.experiments = [];
     client.users.forEach(user => {
       user.destroy();
-    })
+    });
     client.users = [];
     clearAppliedDomChanges();
     document.head.innerHTML = '';
@@ -833,7 +833,9 @@ describe('experiments', () => {
     expect(user.getFeatureFlag('button.unknown').value).toEqual(undefined);
 
     // No matches with default value
-    expect(user.getFeatureFlag('button.unknown', 'default').value).toEqual('default');
+    expect(user.getFeatureFlag('button.unknown', 'default').value).toEqual(
+      'default'
+    );
 
     // First matching experiment
     user.setAttributes({
@@ -865,9 +867,9 @@ describe('experiments', () => {
   });
 
   it('responds to window.growthbook calls', () => {
-    window.growthbook.push("disable");
+    window.growthbook.push('disable');
     expect(client.isEnabled()).toEqual(false);
-    window.growthbook.push("enable");
+    window.growthbook.push('enable');
     expect(client.isEnabled()).toEqual(true);
   });
 });
