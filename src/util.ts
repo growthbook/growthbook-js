@@ -1,4 +1,6 @@
-import { ExperimentParams } from 'types';
+import GrowthBookClient from './client';
+import { Experiment, DomChange } from 'types';
+import mutate from 'dom-mutator';
 
 export function hashFnv32a(str: string): number {
   let hval = 0x811c9dc5;
@@ -68,26 +70,111 @@ export function chooseVariation(
   return -1;
 }
 
-export function getQueryStringOverride(id: string) {
-  if (typeof window === 'undefined') {
+export function urlIsValid(
+  urlRegex: string,
+  client: GrowthBookClient
+): boolean {
+  const escaped = urlRegex.replace(/([^\\])\//g, '$1\\/');
+
+  const url = client.config.url;
+  if (!url) return false;
+
+  const pathOnly = url.replace(/^https?:\/\//, '').replace(/^[^/]*\//, '/');
+
+  try {
+    const regex = new RegExp(escaped);
+    if (regex.test(url)) return true;
+    if (regex.test(pathOnly)) return true;
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
+export function getQueryStringOverride(id: string, client: GrowthBookClient) {
+  const url = client.config.url;
+
+  if (!url) {
     return null;
   }
 
-  const match = window.location.search
-    .substring(1)
-    .split('&')
+  const search = url.split('?')[1];
+  if (!search) {
+    return null;
+  }
+
+  const match = search
+    .replace(/#.*/, '') // Get rid of anchor
+    .split('&') // Split into key/value pairs
     .map(kv => kv.split('=', 2))
-    .filter(([k]) => k === id)
-    .map(([, v]) => parseInt(v));
+    .filter(([k]) => k === id) // Look for key that matches the experiment id
+    .map(([, v]) => parseInt(v)); // Parse the value into an integer
 
   if (match.length > 0 && match[0] >= -1 && match[0] < 10) return match[0];
 
   return null;
 }
 
-export function getWeightsFromOptions(options: ExperimentParams) {
+const appliedDomChanges = new Set();
+export function clearAppliedDomChanges() {
+  appliedDomChanges.clear();
+}
+
+export function applyDomMods({
+  dom,
+  css,
+}: {
+  dom?: DomChange[];
+  css?: string;
+}): () => void {
+  // Only works on a browser environment
+  if (typeof window === 'undefined') {
+    return () => {
+      // do nothing
+    };
+  }
+
+  const revert: (() => void)[] = [];
+  if (dom?.length) {
+    dom.forEach(({ selector, mutation, value }) => {
+      // Make sure we're only applying DOM changes once
+      const key = selector + '__' + mutation + '__' + value;
+      if (appliedDomChanges.has(key)) {
+        return;
+      }
+      appliedDomChanges.add(key);
+
+      // Run the mutation
+      revert.push(mutate(selector, mutation, value));
+      revert.push(() => {
+        appliedDomChanges.delete(key);
+      });
+    });
+  }
+  if (css?.length) {
+    // Make sure we're only applying CSS changes once
+    if (!appliedDomChanges.has(css)) {
+      appliedDomChanges.add(css);
+
+      const style = document.createElement('style');
+      document.head.appendChild(style);
+      style.innerHTML = css;
+
+      revert.push(() => {
+        style.remove();
+        appliedDomChanges.delete(css);
+      });
+    }
+  }
+
+  return () => {
+    revert.forEach(f => f());
+  };
+}
+
+export function getWeightsFromOptions(experiment: Experiment) {
   // 2-way test by default
-  let variations = options.variations || 2;
+  let variations = experiment.variations || 2;
   if (variations < 2 || variations > 20) {
     if (process.env.NODE_ENV !== 'production') {
       console.error('Experiment variations must be between 2 and 20');
@@ -96,7 +183,8 @@ export function getWeightsFromOptions(options: ExperimentParams) {
   }
 
   // Full coverage by default
-  let coverage = typeof options.coverage === 'undefined' ? 1 : options.coverage;
+  let coverage =
+    typeof experiment.coverage === 'undefined' ? 1 : experiment.coverage;
   if (coverage < 0 || coverage > 1) {
     if (process.env.NODE_ENV !== 'production') {
       console.error('Experiment coverage must be between 0 and 1 inclusive');
@@ -104,12 +192,15 @@ export function getWeightsFromOptions(options: ExperimentParams) {
     coverage = 1;
   }
 
-  // Equal weights by default
-  let weights = options.weights || new Array(variations).fill(1 / variations);
-  if (weights.length !== variations) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('Experiment weights for every variation must be specified');
-    }
+  let weights = experiment.variationInfo?.map(v => v.weight || 0) || [];
+
+  // If wrong number of weights, or weights don't add up to 1 (or close to it), default to equal weights
+  const totalWeight = weights.reduce((w, sum) => sum + w, 0);
+  if (
+    weights.length !== variations ||
+    totalWeight < 0.99 ||
+    totalWeight > 1.01
+  ) {
     weights = new Array(variations).fill(1 / variations);
   }
 

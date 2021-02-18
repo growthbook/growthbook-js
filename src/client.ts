@@ -1,44 +1,86 @@
-import { ClientConfigInterface, UserArg, ExperimentsConfig } from './types';
+import { ClientConfigInterface, UserArg, Experiment } from './types';
 import GrowthBookUser from './user';
+
+export const clients: Set<GrowthBookClient> = new Set();
 
 export default class GrowthBookClient {
   config: ClientConfigInterface;
-  experiments: ExperimentsConfig = {};
+  experiments: Experiment[] = [];
+  users: GrowthBookUser[] = [];
+
+  private _enabled: boolean;
+
+  private onPopState: () => void;
 
   constructor(config: Partial<ClientConfigInterface> = {}) {
-    this.config = config;
+    this._enabled = true;
+
+    this.config = {
+      enableQueryStringOverride: true,
+      ...config,
+    };
+
+    this.onPopState = () => {
+      this.setUrl(window.location.href);
+    };
+
+    if (
+      !config.url &&
+      typeof window !== 'undefined' &&
+      window?.location?.href
+    ) {
+      this.config.url = window.location.href;
+      window.addEventListener('popstate', this.onPopState);
+    }
+
+    clients.add(this);
   }
 
-  configure(config: Partial<ClientConfigInterface>): void {
-    // TODO: validate config options
-    Object.assign(this.config, config);
+  isEnabled() {
+    return this._enabled;
   }
 
-  setExperimentConfigs(experiments: ExperimentsConfig): void {
-    this.experiments = experiments;
+  enable() {
+    this._enabled = true;
+  }
+
+  disable() {
+    this._enabled = false;
+    this.users.forEach(user => {
+      user.deactivateAllExperiments();
+    });
+  }
+
+  setUrl(url: string) {
+    this.config.url = url;
+    this.users.forEach(user => {
+      user.refreshActiveExperiments();
+    });
   }
 
   user({ anonId, id, attributes }: UserArg): GrowthBookUser {
-    return new GrowthBookUser(id || '', anonId || '', attributes || {}, this);
+    const user = new GrowthBookUser(
+      id || '',
+      anonId || '',
+      attributes || {},
+      this
+    );
+    this.users.push(user);
+    return user;
   }
 
-  async pullExperimentConfigs(apiKey: string): Promise<boolean> {
-    if (typeof window === 'undefined' || !window.fetch) {
-      return false;
+  destroy() {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('popstate', this.onPopState);
     }
-    try {
-      const res = await fetch(`https://cdn.growthbook.io/config/${apiKey}`);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.status === 200 && json.experiments) {
-          this.experiments = json.experiments;
-          return true;
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
+    this.users.forEach(user => {
+      user.destroy();
+    });
+    this.users = [];
+    this.experiments = [];
+    this._enabled = false;
 
-    return false;
+    // Remove from clients set
+    clients.delete(this);
   }
 }
