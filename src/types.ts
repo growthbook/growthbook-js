@@ -61,8 +61,7 @@ export interface VariationInfo {
 
 export interface Experiment {
   key: string;
-  variations: number;
-  variationInfo?: VariationInfo[];
+  variations: number | VariationInfo[];
   auto?: boolean;
   anon?: boolean;
   status?: 'draft' | 'running' | 'stopped';

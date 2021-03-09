@@ -39,29 +39,26 @@ import GrowthBookClient from '@growthbook/growthbook';
 
 const client = new GrowthBookClient();
 
-// Add experiments to the client
-client.experiments.push({
+// Define the user that you want to run an experiment on
+const user = client.user({id: "12345"});
+
+// Put the user in an experiment
+const {variation} = user.experiment({
     key: "my-experiment",
     variations: 2
 });
 
-// Define the user that you want to run an experiment on
-const user = client.user({id: "12345"});
-
-// Put the user in the experiment
-const {variation} = user.experiment("my-experiment");
+if(variation === 1) {
+    console.log("B!");
+}
+else {
+    console.log("A!");
+}
 ```
 
 ## Experiments
 
-As shown above, the simplest experiment you can define has 2 fields: `key` and `variations`:
-
-```ts
-client.experiments.push({
-    key: "my-experiment",
-    variations: 2
-});
-```
+As shown above, the simplest experiment you can define has 2 fields: `key` and `variations`.
 
 There are a lot more configuration options you can specify.  Here is the full typescript definition:
 
@@ -69,8 +66,8 @@ There are a lot more configuration options you can specify.  Here is the full ty
 interface Experiment {
     // The globally unique tracking key for the experiment
     key: string;
-    // Number of variations including the control (always at least 2)
-    variations: number;
+    // Number of variations, or an array with more detailed info for each variation
+    variations: number | DetailedVariationInfo[];
     // "draft" is only considered when forcing a variation via querystring (for QA)
     status: "draft" | "running" | "stopped";
     // What percent of users should be included in the experiment. Float from 0 to 1.
@@ -85,34 +82,34 @@ interface Experiment {
     force?: number;
     // If true, use anonymous id for assigning, otherwise use logged-in user id
     anon: boolean;
-    // Array of variations, index 0 is control, index 1 is first variation, etc.
-    variationInfo: {
-        // The tracking key for the variation (not globally unique)
-        // Defaults to "0" for control, "1" for first variation, etc.
-        key?: string;
-        // Determines traffic split. Float from 0 to 1, weights for all variations must sum to 1.
-        // Defaults to an even split between all variations
-        weight?: number;
-        // Arbitrary data attached to the variation. Used to parameterize experiments.
-        data?: {
-            [key: string]: any;
-        };
-        // CSS rules that should be injected to the page if this variation is chosen
-        css?: string;
-        // DOM modifications that should be applied if this variation is chosen
-        dom?: {
-            selector: string;
-            mutation: "addClass" | "removeClass" | "appendHTML" | "setHTML" | "setAttribute";
-            value: string;
-        }[];
-        // Callback function that is called when a user is assigned this variation
-        activate?: () => void;
-        // Cleanup function to undo any changes made in `activate`
-        deactivate?: () => void;
-    }[];
     // If true, users who match all targeting rules should automatically be put into the test
     auto: boolean;
 }
+
+interface DetailedVariationInfo {
+    // The tracking key for the variation (not globally unique)
+    // Defaults to "0" for control, "1" for first variation, etc.
+    key?: string;
+    // Determines traffic split. Float from 0 to 1, weights for all variations must sum to 1.
+    // Defaults to an even split between all variations
+    weight?: number;
+    // Arbitrary data attached to the variation. Used to parameterize experiments.
+    data?: {
+        [key: string]: any;
+    };
+    // CSS rules that should be injected to the page if this variation is chosen
+    css?: string;
+    // DOM modifications that should be applied if this variation is chosen
+    dom?: {
+        selector: string;
+        mutation: "addClass" | "removeClass" | "appendHTML" | "setHTML" | "setAttribute";
+        value: string;
+    }[];
+    // Callback function that is called when a user is assigned this variation
+    activate?: () => void;
+    // Cleanup function to undo any changes made in `activate`
+    deactivate?: () => void;
+};
 ```
 
 ## Running Experiments
@@ -127,20 +124,20 @@ Requirements:
 -  Browser environment (NodeJS support is coming soon)
 -  Experiment must have `auto` set to true
 -  Experiment must set the `url` regex field (setting to `.*` is fine, it just can't be empty)
--  Experiment must define `variationInfo`
+-  Experiment must define `variations` as an array with dom, css, and/or activate properties for at least 1 variation
 
 Here is an example experiment that meets these requirements:
 
 ```ts
+// Add the experiments on the client
 client.experiments.push({
     key: "my-automatic-experiment",
-    variations: 2,
     auto: true,
     url: "^/post/[0-9]+",
-    variationInfo: [
+    variations: [
         // Control (doesn't change the page at all)
         {},
-        // Variation
+        // Variation 1
         {
             dom: [
                 {
@@ -165,23 +162,15 @@ client.experiments.push({
 
 If the user lands on the url `/post/123`, they will be assigned a variation, dom/css changes will be applied, and your `activate` function will be called.
 
-In addition, we add a `popstate` listener that activates/deactivates experiments automatically as the URL changes.
-
 ### 2. Code Branching (Browser and NodeJS)
 
-The Code Branching approach works with all experiments, even the most basic:
+With this approach, you put the user in the experiment and fork your code dependeing on the assigned variation.
 
 ```ts
-client.experiments.push({
+const {variation} = user.experiment({
     key: "my-branching-experiment",
     variations: 2
-})
-```
-
-To use, you would put the user in the experiment and get the assigned variation back.
-
-```ts
-const {variation} = user.experiment("my-branching-experiment");
+});
 
 if(variation === 0) {
     console.log('Control');
@@ -199,14 +188,14 @@ else if(variation === -1) {
 You can use Parameterization as a cleaner alternative to code branching for simple experiments.
 
 Requirements:
--  Experiment must define `variationInfo` with the `data` property
+-  Experiment must define `variations` as an array with the `data` property for each variation
 
-Here is an example experiment that meets this requirement:
+Instead of branching, you would extract the data from the chosen variation:
 ```ts
-client.experiments.push({
+// Get data from the assigned variation
+const {data} = user.experiment({
     key: "my-parameterized-experiment",
-    variations: 2,
-    variationInfo: [
+    variations: [
         // Control
         {
             data: {
@@ -220,12 +209,7 @@ client.experiments.push({
             }
         }
     ]
-})
-```
-
-Then instead of branching, you would extract the data from the chosen variation:
-```ts
-const {data} = user.experiment("my-parameterized-experiment");
+});
 
 // Use data tied to the chosen variation, no branching required
 const buttonColor = data.color || "blue";
@@ -233,19 +217,18 @@ const buttonColor = data.color || "blue";
 
 ### 4. Feature Flags (Browser and NodeJS)
 
-Parameterization still requires referencing experiment keys directly in code.  Using feature flags, you can get some of the same benefits while also keeping your code more maintainable.
+Parameterization still requires referencing experiments directly in code.  Using feature flags, you can get some of the same benefits while also keeping your code more maintainable.
 
 Requirements:
--  Experiment must define `variationInfo` with the `data` property
+-  Experiment must define `variations` as an array with the `data` property for each variation
 -  Use more descriptive data keys (e.g. `homepage.signup.color` instead of just `color`)
 
-Here is an example experiment that meets these requirements:
+First, add your experiment definitions to the client:
 
 ```ts
 client.experiments.push({
     key: "my-feature-flag-experiment",
-    variations: 2,
-    variationInfo: [
+    variations: [
         // Control
         {
             data: {
@@ -265,17 +248,7 @@ client.experiments.push({
 Now you can do a lookup based on the data key without knowing about which (if any) experiments are running:
 
 ```ts
-function getFeatureFlag(key: string, defaultValue: any) {
-    // First see if any experiments override a value for this key
-    const {value} = user.lookupByDataKey(key);
-    if(value!==undefined) return value;
-
-    // TODO: Fallback to other feature flag system
-
-    return defaultValue;
-}
-
-const buttonColor = getFeatureFlag("homepage.signup.color", "blue");
+const buttonColor = user.getFeatureFlag("homepage.signup.color") || "blue";
 ```
 
 ## Client Configuration
@@ -290,10 +263,27 @@ Below are all of the available options:
 -  **url** - The URL for the current request (defaults to `window.location.href` when in a browser)
 -  **enableQueryStringOverride** - Default true.  If true, enables forcing variations via the URL.  Very useful for QA.  https://example.com/?my-experiment=1
 
-You can set new options at any point:
+### SPA support
+
+With a Single Page App (SPA), you need to update the client when the URL changes:
 
 ```ts
-client.config.enabled = false;
+client.setUrl(newUrl);
+```
+
+Doing this with Next.js for example, will look like this:
+```tsx
+export default function MyApp({ Component, pageProps }) {
+  const router = useRouter()
+
+  useEffect(() => {
+    const onChange = (newUrl) => client.setUrl(newUrl);
+    router.events.on('routeChangeComplete', onChange);
+    return () => router.events.off('routeChangeComplete', onChange);
+  }, [])
+
+  return <Component {...pageProps} />
+}
 ```
 
 ## User Configuration
@@ -339,7 +329,7 @@ user.setAttributes({
 Experiments can target on these user attributes with the `targeting` field.  Here's an example:
 
 ```ts
-client.experiments.push({
+user.experiment({
     key: "my-targeted-experiment",
     variations: 2,
     targeting: [
@@ -372,7 +362,8 @@ const client = new GrowthBookClient({
 It's not required, but we recommend using [Growth Book](https://www.growthbook.io) to manage your list of experiments and analyze results.
 
 -  Document your experiments with screenshots, markdown, and comment threads
--  Connect to your existing data warehouse/lake to automatically fetch results
+-  Connect to your existing data warehouse or analytics tool to automatically fetch results
+   -  Currently supports Snowflake, BigQuery, Redshift, Postgres, Mixpanel, GA, and Athena
 -  Advanced bayesian statistics and automated data-quality checks (SRM, etc.)
 -  Simple and affordable pricing
 

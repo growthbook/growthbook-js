@@ -173,15 +173,6 @@ export function applyDomMods({
 }
 
 export function getWeightsFromOptions(experiment: Experiment) {
-  // 2-way test by default
-  let variations = experiment.variations || 2;
-  if (variations < 2 || variations > 20) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('Experiment variations must be between 2 and 20');
-    }
-    variations = 2;
-  }
-
   // Full coverage by default
   let coverage =
     typeof experiment.coverage === 'undefined' ? 1 : experiment.coverage;
@@ -192,16 +183,21 @@ export function getWeightsFromOptions(experiment: Experiment) {
     coverage = 1;
   }
 
-  let weights = experiment.variationInfo?.map(v => v.weight || 0) || [];
+  let weights: number[] = Array.isArray(experiment.variations)
+    ? experiment.variations.map(v => v.weight || 0)
+    : Array(experiment.variations || 2).fill(0);
 
-  // If wrong number of weights, or weights don't add up to 1 (or close to it), default to equal weights
+  if (weights.length < 2 || weights.length > 20) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Experiments must have between 2 and 20 variations');
+    }
+    weights = [0.5, 0.5];
+  }
+
+  // If weights don't add up to 1 (or close to it), default to equal weights
   const totalWeight = weights.reduce((w, sum) => sum + w, 0);
-  if (
-    weights.length !== variations ||
-    totalWeight < 0.99 ||
-    totalWeight > 1.01
-  ) {
-    weights = new Array(variations).fill(1 / variations);
+  if (totalWeight < 0.99 || totalWeight > 1.01) {
+    weights = new Array(weights.length).fill(1 / weights.length);
   }
 
   // Scale weights by traffic coverage

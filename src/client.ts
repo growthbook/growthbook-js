@@ -10,8 +10,6 @@ export default class GrowthBookClient {
 
   private _enabled: boolean;
 
-  private onPopState: () => void;
-
   constructor(config: Partial<ClientConfigInterface> = {}) {
     this._enabled = true;
 
@@ -20,17 +18,12 @@ export default class GrowthBookClient {
       ...config,
     };
 
-    this.onPopState = () => {
-      this.setUrl(window.location.href);
-    };
-
     if (
       !config.url &&
       typeof window !== 'undefined' &&
       window?.location?.href
     ) {
       this.config.url = window.location.href;
-      window.addEventListener('popstate', this.onPopState);
     }
 
     clients.add(this);
@@ -70,9 +63,6 @@ export default class GrowthBookClient {
   }
 
   destroy() {
-    if (typeof window !== 'undefined') {
-      window.removeEventListener('popstate', this.onPopState);
-    }
     this.users.forEach(user => {
       user.destroy();
     });

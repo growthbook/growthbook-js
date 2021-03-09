@@ -81,7 +81,7 @@ export default class GrowthBookUser {
     this.activeExperiments.forEach(res => {
       if (!res.experiment || res.variation === -1) return;
 
-      const newRes = this.experiment(res.experiment);
+      const newRes = this.runExperiment(res.experiment);
       if (newRes.variation === -1) {
         this.log(
           'No longer in experiment ' + res.experiment.key + ', deactivating'
@@ -101,10 +101,10 @@ export default class GrowthBookUser {
       if (deactivatedIds.has(exp.key)) return;
 
       // Must be marked as auto, targeting based on url, and have variation info
-      if (!exp.auto || !exp.url || !exp.variationInfo) return;
+      if (!exp.auto || !exp.url || !Array.isArray(exp.variations)) return;
 
       // Put user in experiment and apply any dom/css mods
-      const res = this.experiment(exp);
+      const res = this.runExperiment(exp);
       res.activate();
     });
   }
@@ -119,10 +119,10 @@ export default class GrowthBookUser {
   }
 
   private isIncluded(experiment: Experiment): boolean {
-    if (experiment.variations < 2) {
+    const numVariations = this.getNumVariations(experiment);
+    if (numVariations < 2) {
       this.log(
-        'variations must be at least 2, but only set to ' +
-          experiment.variations
+        'variations must be at least 2, but only set to ' + numVariations
       );
       return false;
     }
@@ -166,54 +166,40 @@ export default class GrowthBookUser {
     experiment?: Experiment,
     variation: number = -1
   ): ExperimentResults {
-    let revert: () => void;
+    let activate: () => void = () => {};
+    let deactivate: () => void = () => {};
 
-    const res = {
-      variation,
-      experiment,
-      data: experiment
-        ? this.getVariationData(experiment, variation)
-        : undefined,
-      activate:
-        variation >= 0
-          ? () => {
-              // Ignore if already active
-              if (this.activeExperiments.includes(res)) return;
+    if (variation >= 0 && experiment && Array.isArray(experiment.variations)) {
+      const info = experiment.variations[variation];
+      const key = experiment.key;
+      let revert: () => void;
+      activate = () => {
+        // Ignore if already active
+        if (this.activeExperiments.includes(res)) return;
 
-              // Add to active list
-              this.activeExperiments.push(res);
+        // Add to active list
+        this.activeExperiments.push(res);
 
-              const info = experiment?.variationInfo?.[variation];
-
-              if (info?.activate) {
-                this.log(
-                  'Running custom activate function for ' + experiment?.key
-                );
-                info.activate();
-              }
-              if (info?.dom || info?.css) {
-                this.log('Applying DOM/css mods for ' + experiment?.key);
-                revert = applyDomMods({
-                  dom: info.dom,
-                  css: info.css,
-                });
-              }
-            }
-          : () => {
-              // do nothing if not in experiment
-            },
-      deactivate: () => {
-        // Unapply dom/css changes
+        if (info.activate) {
+          this.log('Running custom activate function for ' + key);
+          info.activate();
+        }
+        if (info.dom || info.css) {
+          this.log('Applying DOM/CSS mods for ' + key);
+          revert = applyDomMods({
+            dom: info.dom,
+            css: info.css,
+          });
+        }
+      };
+      deactivate = () => {
         if (revert) {
-          this.log('Reverting DOM/css changes for ' + experiment?.key);
+          this.log('Reverting DOM/CSS changes for ' + key);
           revert();
         }
-
-        // Undo custom changes
-        const deactivate = experiment?.variationInfo?.[variation]?.deactivate;
-        if (deactivate) {
-          this.log('Running custom deactivate function for ' + experiment?.key);
-          deactivate();
+        if (info.deactivate) {
+          this.log('Running custom deactivate function for ' + key);
+          info.deactivate();
         }
 
         // Remove from active list
@@ -221,24 +207,30 @@ export default class GrowthBookUser {
         if (index !== -1) {
           this.activeExperiments.splice(index, 1);
         }
-      },
+      };
+    }
+
+    const res = {
+      variation,
+      experiment,
+      data: experiment
+        ? this.getVariationData(experiment, variation)
+        : undefined,
+      activate,
+      deactivate,
     };
     return res;
   }
 
-  experiment(experiment: string | Experiment): ExperimentResults {
-    if (typeof experiment === 'string') {
-      const id = experiment;
-      experiment = this.client.experiments.filter(e => e.key === experiment)[0];
-      if (!experiment) {
-        this.log(
-          'Tried to put user in experiment ' + id + ', but experiment not found'
-        );
-        return this.getExperimentResults();
-      }
-    }
-
+  private runExperiment(
+    experiment: Experiment,
+    isOverride: boolean = false
+  ): ExperimentResults {
     this.log('Trying to put user in experiment ' + experiment.key);
+
+    if (isOverride) {
+      this.log('Using override experiment configs in client');
+    }
 
     // Experiments turned off globally
     if (!this.client.isEnabled()) {
@@ -281,10 +273,37 @@ export default class GrowthBookUser {
     return this.getExperimentResults(experiment, variation);
   }
 
-  getFeatureFlag<T = any>(
-    key: string,
-    defaultValue: T | undefined = undefined
-  ): DataLookupResults<T> {
+  private getNumVariations(experiment: Experiment) {
+    return Array.isArray(experiment.variations)
+      ? experiment.variations.length
+      : experiment.variations;
+  }
+
+  experiment(experiment: Experiment): ExperimentResults {
+    // Look for overrides in the client
+    const override = this.client.experiments
+      .filter(e => e.key === experiment.key)
+      .pop();
+    if (override) {
+      // Make sure override has same number of variations
+      if (
+        this.getNumVariations(experiment) === this.getNumVariations(override)
+      ) {
+        return this.runExperiment(override, true);
+      }
+
+      if (process.env.NODE_ENV !== 'production') {
+        console.error(
+          'Experiment override in client has a different number of variations from the inline definition - ' +
+            experiment.key
+        );
+      }
+    }
+
+    return this.runExperiment(experiment);
+  }
+
+  getFeatureFlag<T = any>(key: string): DataLookupResults<T> {
     this.log('Looking up experiments that define data for ' + key);
 
     // Experiments turned off globally
@@ -293,7 +312,7 @@ export default class GrowthBookUser {
       return {
         experiment: undefined,
         variation: undefined,
-        value: defaultValue,
+        value: undefined,
       };
     }
 
@@ -301,10 +320,10 @@ export default class GrowthBookUser {
       for (let i = 0; i < this.client.experiments.length; i++) {
         const exp = this.client.experiments[i];
         if (
-          exp.variationInfo &&
-          exp.variationInfo.filter(v => v.data && v.data[key]).length > 0
+          Array.isArray(exp.variations) &&
+          exp.variations.filter(v => v.data && key in v.data).length > 0
         ) {
-          const ret = this.experiment(exp);
+          const ret = this.runExperiment(exp);
           if (ret.variation >= 0) {
             if (ret.data && key in ret.data) {
               this.log('Using value from variation: ' + ret.data[key]);
@@ -314,14 +333,11 @@ export default class GrowthBookUser {
                 value: ret.data[key] as T,
               };
             } else {
-              this.log(
-                'No value defined for variation, using default value: ' +
-                  defaultValue
-              );
+              this.log('No value defined for variation');
               return {
                 experiment: exp,
                 variation: ret.variation,
-                value: defaultValue,
+                value: undefined,
               };
             }
           }
@@ -329,15 +345,12 @@ export default class GrowthBookUser {
       }
     }
 
-    this.log(
-      'No experiments found for the data key, returning default value: ' +
-        defaultValue
-    );
+    this.log('No experiments found for the data key');
 
     return {
       experiment: undefined,
       variation: undefined,
-      value: defaultValue,
+      value: undefined,
     };
   }
 
@@ -345,11 +358,10 @@ export default class GrowthBookUser {
     experiment: Experiment,
     variation: number
   ): VariationData {
-    if (experiment.variationInfo?.[variation]) {
-      return experiment.variationInfo[variation].data || {};
-    }
-    // Fall back to using the data from control
-    return experiment.variationInfo?.[0]?.data || {};
+    if (!Array.isArray(experiment.variations)) return {};
+    // If user is not in the experiment, return the control data
+    if (variation === -1) return experiment.variations[0]?.data || {};
+    return experiment.variations[variation]?.data || {};
   }
 
   private isTargeted(rules: string[]): boolean {
@@ -402,7 +414,9 @@ export default class GrowthBookUser {
 
       if (this.client.config.onExperimentViewed) {
         const variationKey =
-          experiment.variationInfo?.[variation]?.key || '' + variation;
+          (Array.isArray(experiment.variations)
+            ? experiment.variations[variation]?.key
+            : null) || '' + variation;
 
         this.client.config.onExperimentViewed({
           experiment,

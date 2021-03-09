@@ -20,7 +20,8 @@
     "test": "tsdx test",
     "lint": "tsdx lint",
     "prepare": "tsdx build",
-    "gzipsize": "gzip -c dist/growthbook.esm.min.js | wc -c",
+    "size": "size-limit",
+    "analyze": "size-limit --why",
     "esmdev": "terser dist/growthbook.esm.js -c -m -o dist/growthbook.esm.min.js --source-map \"content='dist/growthbook.esm.js.map',url='growthbook.esm.min.js.map'\""
   },
   "peerDependencies": {},
@@ -38,8 +39,20 @@
   "name": "@growthbook/growthbook",
   "author": "Jeremy Dorn",
   "module": "dist/growthbook-js.esm.js",
+  "size-limit": [
+    {
+      "path": "dist/growthbook.cjs.production.min.js",
+      "limit": "5 KB"
+    },
+    {
+      "path": "dist/growthbook.esm.min.js",
+      "limit": "5 KB"
+    }
+  ],
   "devDependencies": {
-    "husky": "^4.2.5",
+    "@size-limit/preset-small-lib": "^4.9.2",
+    "husky": "^4.3.8",
+    "size-limit": "^4.9.2",
     "terser": "^5.6.0-beta",
     "tsdx": "^0.14.1",
     "tslib": "^2.0.3",

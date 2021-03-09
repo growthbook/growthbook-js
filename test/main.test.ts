@@ -13,12 +13,28 @@ function sleep(ms = 20) {
 
 const client = new GrowthBookClient();
 
+function debug(func: () => any, c: GrowthBookClient = client) {
+  c.config.debug = true;
+  const ret = func();
+  c.config.debug = false;
+  return ret;
+}
+// This is just to avoid typescript warnings about unused function
+debug(() => 1);
+
 const chooseVariation = (
   userId: string | null,
   experiment: string | Experiment,
   attributes?: UserAttributes,
   anonId?: string
 ) => {
+  if (typeof experiment === 'string') {
+    experiment = {
+      key: experiment,
+      variations: 2,
+    };
+  }
+
   const user = client.user({
     id: userId || '',
     anonId: anonId || '',
@@ -71,17 +87,6 @@ describe('experiments', () => {
     newClient.destroy();
   });
 
-  it('missing variations', () => {
-    expect(chooseVariation('1', 'my-test')).toEqual(-1);
-
-    client.experiments.push({
-      key: 'my-test',
-      variations: 2,
-    });
-
-    expect(chooseVariation('1', 'my-test')).toEqual(1);
-  });
-
   it('defaultWeights', () => {
     const exp = {
       key: 'my-test',
@@ -101,8 +106,7 @@ describe('experiments', () => {
   it('unevenWeights', () => {
     const exp = {
       key: 'my-test',
-      variations: 2,
-      variationInfo: [{ weight: 0.1 }, { weight: 0.9 }],
+      variations: [{ weight: 0.1 }, { weight: 0.9 }],
     };
 
     expect(chooseVariation('1', exp)).toEqual(1);
@@ -214,8 +218,7 @@ describe('experiments', () => {
   it('tracks variation keys', () => {
     const exp = {
       key: 'my-test',
-      variations: 2,
-      variationInfo: [
+      variations: [
         {
           key: 'first',
         },
@@ -276,16 +279,14 @@ describe('experiments', () => {
     expect(
       getWeightsFromOptions({
         key: 'my-test',
-        variations: 2,
-        variationInfo: [{ weight: 0.4 }, { weight: 0.1 }],
+        variations: [{ weight: 0.4 }, { weight: 0.1 }],
       })
     ).toEqual([0.5, 0.5]);
 
     expect(
       getWeightsFromOptions({
         key: 'my-test',
-        variations: 2,
-        variationInfo: [{ weight: 0.7 }, { weight: 0.6 }],
+        variations: [{ weight: 0.7 }, { weight: 0.6 }],
       })
     ).toEqual([0.5, 0.5]);
 
@@ -297,14 +298,10 @@ describe('experiments', () => {
     const newClient = new GrowthBookClient();
     expect(newClient.config.url).toEqual(window.location.href);
 
-    window.location.href = 'http://example.com/anotherPath';
-    window.dispatchEvent(new PopStateEvent('popstate', {}));
-    expect(newClient.config.url).toEqual(window.location.href);
-
     newClient.destroy();
   });
 
-  it('override variation', () => {
+  it('force variation', () => {
     expect(chooseVariation('6', { key: 'forced-test', variations: 2 })).toEqual(
       0
     );
@@ -320,15 +317,53 @@ describe('experiments', () => {
   });
 
   it('handles weird targeting rules', () => {
-    const spy = jest.spyOn(console, 'error').mockImplementation();
     expect(checkRule('9', '<', '20')).toEqual(true);
     expect(checkRule('5', '<', '4')).toEqual(false);
+
+    const spy = jest.spyOn(console, 'error').mockImplementation();
     expect(checkRule('a', '?', 'b')).toEqual(true);
+    expect(spy.mock.calls.length).toEqual(1);
     spy.mockRestore();
   });
 
-  it('targeting', () => {
+  it('uses overrides', () => {
     client.experiments.push({
+      key: 'my-test',
+      variations: 2,
+      coverage: 0.01,
+    });
+
+    expect(
+      chooseVariation('1', {
+        key: 'my-test',
+        variations: 2,
+      })
+    ).toEqual(-1);
+  });
+
+  it('ignores override if numVariations is different', () => {
+    client.experiments.push({
+      key: 'my-test',
+      variations: 2,
+      coverage: 1,
+    });
+
+    const user = client.user({ id: '1' });
+
+    const spy = jest.spyOn(console, 'error').mockImplementation();
+    const res = user.experiment({
+      key: 'my-test',
+      variations: 3,
+      coverage: 0.5,
+    });
+    expect(spy.mock.calls.length).toEqual(1);
+    spy.mockRestore();
+
+    expect(res.experiment?.coverage).toEqual(0.5);
+  });
+
+  it('targeting', () => {
+    const exp = {
       key: 'my-test',
       variations: 2,
       targeting: [
@@ -338,7 +373,7 @@ describe('experiments', () => {
         'name != matt',
         'email !~ ^.*@exclude.com$',
       ],
-    });
+    };
 
     // Matches all
     const user = client.user({
@@ -351,7 +386,7 @@ describe('experiments', () => {
         email: 'test@example.com',
       },
     });
-    expect(user.experiment('my-test').variation).toEqual(1);
+    expect(user.experiment(exp).variation).toEqual(1);
 
     // Missing negative checks
     user.setAttributes(
@@ -362,11 +397,11 @@ describe('experiments', () => {
       },
       false
     );
-    expect(user.experiment('my-test').variation).toEqual(1);
+    expect(user.experiment(exp).variation).toEqual(1);
 
     // Missing all attributes
     user.setAttributes({}, false);
-    expect(user.experiment('my-test').variation).toEqual(-1);
+    expect(user.experiment(exp).variation).toEqual(-1);
 
     // Fails boolean
     user.setAttributes(
@@ -379,7 +414,7 @@ describe('experiments', () => {
       },
       false
     );
-    expect(user.experiment('my-test').variation).toEqual(-1);
+    expect(user.experiment(exp).variation).toEqual(-1);
 
     // Fails number
     user.setAttributes(
@@ -392,7 +427,7 @@ describe('experiments', () => {
       },
       false
     );
-    expect(user.experiment('my-test').variation).toEqual(-1);
+    expect(user.experiment(exp).variation).toEqual(-1);
 
     // Fails regex
     user.setAttributes(
@@ -405,7 +440,7 @@ describe('experiments', () => {
       },
       false
     );
-    expect(user.experiment('my-test').variation).toEqual(-1);
+    expect(user.experiment(exp).variation).toEqual(-1);
 
     // Fails not equals
     user.setAttributes(
@@ -418,7 +453,7 @@ describe('experiments', () => {
       },
       false
     );
-    expect(user.experiment('my-test').variation).toEqual(-1);
+    expect(user.experiment(exp).variation).toEqual(-1);
 
     // Fails not regex
     user.setAttributes(
@@ -431,7 +466,7 @@ describe('experiments', () => {
       },
       false
     );
-    expect(user.experiment('my-test').variation).toEqual(-1);
+    expect(user.experiment(exp).variation).toEqual(-1);
   });
 
   it('experiments disabled', () => {
@@ -530,10 +565,12 @@ describe('experiments', () => {
   });
 
   it('applies dom changes', async () => {
-    client.experiments.push({
+    const initial = '<h1 class="second first">my title</h1>';
+    document.body.innerHTML = initial;
+    const user = client.user({ id: '1' });
+    const { variation, activate, deactivate } = user.experiment({
       key: 'my-test',
-      variations: 2,
-      variationInfo: [
+      variations: [
         {},
         {
           dom: [
@@ -566,10 +603,6 @@ describe('experiments', () => {
         },
       ],
     });
-    const initial = '<h1 class="second first">my title</h1>';
-    document.body.innerHTML = initial;
-    const user = client.user({ id: '1' });
-    const { variation, activate, deactivate } = user.experiment('my-test');
 
     const el = document.querySelector('h1');
 
@@ -595,19 +628,17 @@ describe('experiments', () => {
   });
 
   it('applies css changes', () => {
-    client.experiments.push({
+    document.head.innerHTML = '';
+    const user = client.user({ id: '1' });
+    const { variation, activate, deactivate } = user.experiment({
       key: 'my-test',
-      variations: 2,
-      variationInfo: [
+      variations: [
         {},
         {
           css: 'body{color:red}',
         },
       ],
     });
-    document.head.innerHTML = '';
-    const user = client.user({ id: '1' });
-    const { variation, activate, deactivate } = user.experiment('my-test');
 
     expect(variation).toEqual(1);
     expect(document.head.innerHTML).toEqual('');
@@ -620,10 +651,9 @@ describe('experiments', () => {
   it('auto runs tests', async () => {
     client.experiments.push({
       key: 'my-test',
-      variations: 2,
       auto: true,
       url: '.*',
-      variationInfo: [
+      variations: [
         {},
         {
           dom: [
@@ -649,8 +679,7 @@ describe('experiments', () => {
   it('does not reapply the same change', async () => {
     const exp: Experiment = {
       key: 'my-test',
-      variations: 2,
-      variationInfo: [
+      variations: [
         {},
         {
           css: 'body{color:red}',
@@ -687,8 +716,7 @@ describe('experiments', () => {
     let value = 0;
     const exp: Experiment = {
       key: 'my-test',
-      variations: 2,
-      variationInfo: [
+      variations: [
         {},
         {
           activate: () => {
@@ -713,10 +741,9 @@ describe('experiments', () => {
     let value = 0;
     const exp: Experiment = {
       key: 'my-test',
-      variations: 2,
       auto: true,
       url: 'about',
-      variationInfo: [
+      variations: [
         {},
         {
           activate: () => {
@@ -736,12 +763,10 @@ describe('experiments', () => {
     newClient.user({ id: '1' });
     expect(value).toEqual(0);
 
-    window.location.href = 'http://example.com/about';
-    window.dispatchEvent(new PopStateEvent('popstate', {}));
+    newClient.setUrl('http://example.com/about');
     expect(value).toEqual(1);
 
-    window.location.href = 'http://example.com/pricing';
-    window.dispatchEvent(new PopStateEvent('popstate', {}));
+    newClient.setUrl('http://example.com/pricing');
     expect(value).toEqual(0);
 
     newClient.destroy();
@@ -752,8 +777,7 @@ describe('experiments', () => {
 
     const exp: Experiment = {
       key: 'my-test',
-      variations: 2,
-      variationInfo: [
+      variations: [
         {
           data: {
             color: 'blue',
@@ -789,9 +813,8 @@ describe('experiments', () => {
   it('feature flag lookup', () => {
     const expChrome = {
       key: 'button-color-size-chrome',
-      variations: 2,
       targeting: ['browser = chrome'],
-      variationInfo: [
+      variations: [
         {
           data: {
             'button.color': 'blue',
@@ -808,9 +831,8 @@ describe('experiments', () => {
     };
     const expSafari = {
       key: 'button-color-safari',
-      variations: 2,
       targeting: ['browser = safari'],
-      variationInfo: [
+      variations: [
         {
           data: {
             'button.color': 'blue',
@@ -831,11 +853,6 @@ describe('experiments', () => {
 
     // No matches
     expect(user.getFeatureFlag('button.unknown').value).toEqual(undefined);
-
-    // No matches with default value
-    expect(user.getFeatureFlag('button.unknown', 'default').value).toEqual(
-      'default'
-    );
 
     // First matching experiment
     user.setAttributes({
