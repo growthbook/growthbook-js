@@ -53,6 +53,10 @@ export default class GrowthBookUser {
     return this;
   }
 
+  getAttributes(): UserAttributes {
+    return this.attributes;
+  }
+
   deactivateAllExperiments() {
     // Deactivate any active experiments and cleanup for GC
     this.activeExperiments.forEach(exp => exp.deactivate());
@@ -129,6 +133,11 @@ export default class GrowthBookUser {
 
     if (experiment.status === 'draft') {
       this.log('experiment in draft mode');
+      return false;
+    }
+
+    if (experiment.status === 'stopped' && !('force' in experiment)) {
+      this.log('experiment is stopped and no variation is forced');
       return false;
     }
 

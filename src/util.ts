@@ -128,6 +128,7 @@ export function applyDomMods({
   css?: string;
 }): () => void {
   // Only works on a browser environment
+  /* istanbul ignore next */
   if (typeof window === 'undefined') {
     return () => {
       // do nothing

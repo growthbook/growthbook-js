@@ -247,6 +247,13 @@ describe('experiments', () => {
     const spy = jest.spyOn(console, 'error').mockImplementation();
 
     expect(
+      chooseVariation('1', {
+        key: 'my-test',
+        variations: 1,
+      })
+    ).toEqual(-1);
+
+    expect(
       getWeightsFromOptions({
         key: 'my-test',
         variations: 1,
@@ -362,6 +369,33 @@ describe('experiments', () => {
     expect(res.experiment?.coverage).toEqual(0.5);
   });
 
+  it('merges user attributes', () => {
+    const user = client.user({
+      id: '1',
+      attributes: {
+        foo: 1,
+        bar: 2,
+      },
+    });
+    expect(user.getAttributes()).toEqual({
+      foo: 1,
+      bar: 2,
+    });
+
+    user.setAttributes(
+      {
+        bar: 3,
+        baz: 4,
+      },
+      true
+    );
+    expect(user.getAttributes()).toEqual({
+      foo: 1,
+      bar: 3,
+      baz: 4,
+    });
+  });
+
   it('targeting', () => {
     const exp = {
       key: 'my-test',
@@ -473,9 +507,20 @@ describe('experiments', () => {
     const mock = mockCallback();
     client.disable();
 
+    // Experiment
     expect(
       chooseVariation('1', { key: 'disabled-test', variations: 2 })
     ).toEqual(-1);
+
+    // Feature flag
+    const user = client.user({ id: '1' });
+    client.experiments.push({
+      key: 'my-test',
+      variations: [{ data: { color: 'blue' } }, { data: { color: 'green' } }],
+    });
+    const res = user.getFeatureFlag('color');
+    expect(res.value).toEqual(undefined);
+
     expect(mock.calls.length).toEqual(0);
   });
 
@@ -562,6 +607,22 @@ describe('experiments', () => {
     client.config.enableQueryStringOverride = true;
 
     expect(chooseVariation('1', exp)).toEqual(1);
+  });
+
+  it('ignores stopped experiments unless forced', () => {
+    const expLose: Experiment = {
+      key: 'my-test',
+      status: 'stopped',
+      variations: 3,
+    };
+    const expWin: Experiment = {
+      key: 'my-test',
+      status: 'stopped',
+      variations: 3,
+      force: 2,
+    };
+    expect(chooseVariation('1', expLose)).toEqual(-1);
+    expect(chooseVariation('1', expWin)).toEqual(2);
   });
 
   it('applies dom changes', async () => {
@@ -883,10 +944,50 @@ describe('experiments', () => {
     expect(user.getFeatureFlag('button.size').value).toEqual(undefined);
   });
 
+  it('feature flag missing data', () => {
+    client.experiments.push({
+      key: 'my-test',
+      variations: [{ data: { color: 'blue' } }, {}],
+    });
+
+    const user = client.user({ id: '1' });
+    const res = user.getFeatureFlag('color');
+    expect(res.variation).toEqual(1);
+    expect(res.value).toEqual(undefined);
+  });
+
   it('responds to window.growthbook calls', () => {
     window.growthbook.push('disable');
     expect(client.isEnabled()).toEqual(false);
     window.growthbook.push('enable');
     expect(client.isEnabled()).toEqual(true);
+  });
+
+  it('does even weighting', () => {
+    // Full coverage
+    const exp: Experiment = { key: 'my-test', variations: 2 };
+    let variations: Record<string, number> = {
+      '0': 0,
+      '1': 0,
+      '-1': 0,
+    };
+    for (let i = 0; i < 1000; i++) {
+      variations[chooseVariation('' + i, exp) + '']++;
+    }
+    expect(variations['0']).toEqual(503);
+
+    // Reduced coverage
+    exp.coverage = 0.4;
+    variations = {
+      '0': 0,
+      '1': 0,
+      '-1': 0,
+    };
+    for (let i = 0; i < 1000; i++) {
+      variations[chooseVariation('' + i, exp) + '']++;
+    }
+    expect(variations['0']).toEqual(200);
+    expect(variations['1']).toEqual(204);
+    expect(variations['-1']).toEqual(596);
   });
 });

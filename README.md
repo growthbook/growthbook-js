@@ -30,9 +30,7 @@ import GrowthBookClient from 'https://unpkg.com/@growthbook/growthbook/dist/grow
 </script>
 ```
 
-## Usage
-
-Basic setup:
+## Quick Usage
 
 ```ts
 import GrowthBookClient from '@growthbook/growthbook';
@@ -68,7 +66,7 @@ interface Experiment {
     key: string;
     // Number of variations, or an array with more detailed info for each variation
     variations: number | DetailedVariationInfo[];
-    // "draft" is only considered when forcing a variation via querystring (for QA)
+    // "running" is always active, "draft" is only active during QA. "stopped" is only active when forcing a winning variation
     status: "draft" | "running" | "stopped";
     // What percent of users should be included in the experiment. Float from 0 to 1.
     coverage?: number;
@@ -359,7 +357,7 @@ const client = new GrowthBookClient({
 
 ## Using with the Growth Book App
 
-It's not required, but we recommend using [Growth Book](https://www.growthbook.io) to manage your list of experiments and analyze results.
+Managing experiments and analyzing results at scale can be complicated, which is why we built the [Growth Book App](https://www.growthbook.io).  It's completely optional, but definitely worth checking out.
 
 -  Document your experiments with screenshots, markdown, and comment threads
 -  Connect to your existing data warehouse or analytics tool to automatically fetch results
@@ -370,5 +368,7 @@ It's not required, but we recommend using [Growth Book](https://www.growthbook.i
 Integration is super easy:
 
 1.  Create a Growth Book API key - https://docs.growthbook.io/api
-2.  Periodically fetch the latest experiment list from the API and cache in your database
+2.  Periodically fetch the latest experiment list from the API and cache in Redis, Mongo, etc.
 3.  At the start of your app, run `client.experiments.push(...listFromDB)`
+
+Now you can start/stop tests, adjust coverage and variation weights, and apply a winning variation to 100% of traffic, all within the Growth Book App without deploying code changes to your site.

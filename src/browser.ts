@@ -28,7 +28,7 @@ if (typeof window !== 'undefined') {
       }
     },
   };
-
+  /* istanbul ignore next */
   queue.forEach(method => {
     window.growthbook.push(method);
   });
