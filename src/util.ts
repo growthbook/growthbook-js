@@ -1,6 +1,6 @@
 import GrowthBookClient from './client';
-import { Experiment, DomChange } from 'types';
-import mutate from 'dom-mutator';
+import { Experiment } from 'types';
+import mutate, { DeclarativeMutation } from 'dom-mutator';
 
 export function hashFnv32a(str: string): number {
   let hval = 0x811c9dc5;
@@ -124,7 +124,7 @@ export function applyDomMods({
   dom,
   css,
 }: {
-  dom?: DomChange[];
+  dom?: DeclarativeMutation[];
   css?: string;
 }): () => void {
   // Only works on a browser environment
@@ -137,17 +137,19 @@ export function applyDomMods({
 
   const revert: (() => void)[] = [];
   if (dom?.length) {
-    dom.forEach(({ selector, mutation, value }) => {
+    dom.forEach(mutation => {
       // Make sure we're only applying DOM changes once
-      const key = selector + '__' + mutation + '__' + value;
+      const key = JSON.stringify(mutation);
       if (appliedDomChanges.has(key)) {
         return;
       }
       appliedDomChanges.add(key);
 
       // Run the mutation
-      revert.push(mutate(selector, mutation, value));
+      const controller = mutate.declarative(mutation);
+
       revert.push(() => {
+        controller.revert();
         appliedDomChanges.delete(key);
       });
     });

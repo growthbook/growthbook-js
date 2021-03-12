@@ -1,3 +1,5 @@
+import { DeclarativeMutation } from 'dom-mutator';
+
 export interface UserAttributes {
   [key: string]: unknown;
 }
@@ -34,26 +36,13 @@ export interface DataLookupResults<T = unknown> {
   value: T | undefined;
 }
 
-export type DomChangeMethod =
-  | 'addClass'
-  | 'removeClass'
-  | 'appendHTML'
-  | 'setHTML'
-  | 'setAttribute';
-
-export interface DomChange {
-  selector: string;
-  mutation: DomChangeMethod;
-  value: string;
-}
-
 export interface VariationInfo {
   key?: string;
   weight?: number;
   data?: {
     [key: string]: unknown;
   };
-  dom?: DomChange[];
+  dom?: DeclarativeMutation[];
   css?: string;
   activate?: () => void;
   deactivate?: () => void;
@@ -79,7 +68,7 @@ export type TrackExperimentFunctionProps = {
   anonId?: string;
   data?: VariationData;
   userAttributes?: UserAttributes;
-  dom?: DomChange[];
+  dom?: DeclarativeMutation[];
   css?: string;
 };
 

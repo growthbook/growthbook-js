@@ -637,28 +637,33 @@ describe('experiments', () => {
           dom: [
             {
               selector: 'h1',
-              mutation: 'addClass',
+              action: 'append',
+              attribute: 'class',
               value: 'new',
             },
             {
               selector: 'h1',
-              mutation: 'removeClass',
+              action: 'remove',
+              attribute: 'class',
               value: 'first',
             },
             {
               selector: 'h1',
-              mutation: 'setHTML',
+              action: 'set',
+              attribute: 'html',
               value: 'hello',
             },
             {
               selector: 'h1',
-              mutation: 'appendHTML',
+              action: 'append',
+              attribute: 'html',
               value: ' world',
             },
             {
               selector: 'h1',
-              mutation: 'setAttribute',
-              value: 'title="hello"',
+              action: 'set',
+              attribute: 'title',
+              value: 'hello',
             },
           ],
         },
@@ -720,7 +725,8 @@ describe('experiments', () => {
           dom: [
             {
               selector: 'h1',
-              mutation: 'setHTML',
+              action: 'set',
+              attribute: 'html',
               value: 'hello world',
             },
           ],
@@ -747,7 +753,8 @@ describe('experiments', () => {
           dom: [
             {
               selector: 'h1',
-              mutation: 'appendHTML',
+              action: 'append',
+              attribute: 'html',
               value: ' world',
             },
           ],

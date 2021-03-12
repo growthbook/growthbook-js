@@ -100,7 +100,10 @@ interface DetailedVariationInfo {
     // DOM modifications that should be applied if this variation is chosen
     dom?: {
         selector: string;
-        mutation: "addClass" | "removeClass" | "appendHTML" | "setHTML" | "setAttribute";
+        // "remove" only works when attribute is "class"
+        action: "set" | "append" | "remove"
+        // any valid html attribute or the string "html" to modify innerHTML
+        attribute: string;
         value: string;
     }[];
     // Callback function that is called when a user is assigned this variation
@@ -140,7 +143,8 @@ client.experiments.push({
             dom: [
                 {
                     selector: "h1",
-                    mutation: "setHTML",
+                    action: "set",
+                    attribute: "html",
                     value: "My New Title"
                 }
             ],

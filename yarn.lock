@@ -3317,10 +3317,10 @@ doctrine@^3.0.0:
   dependencies:
     esutils "^2.0.2"
 
-dom-mutator@^0.2.4:
-  version "0.2.4"
-  resolved "https://registry.yarnpkg.com/dom-mutator/-/dom-mutator-0.2.4.tgz#8f5b3c6840ff1e95e709f034e014db507e3dbe03"
-  integrity sha512-wRMqLgCWuOFeBR1oOEbc9OIhOZe31YfinKzg34mG7dTjHEXPYO/B08eX4JBJcn/vALEl+ZE1QRwBnL1k3tu7mQ==
+dom-mutator@^0.3.1:
+  version "0.3.1"
+  resolved "https://registry.yarnpkg.com/dom-mutator/-/dom-mutator-0.3.1.tgz#811fe5752a44e15cb9387cd03fda074fc8ae7c4f"
+  integrity sha512-D0kuzLjY9jj6oBeebwIk6ckhQRGB5zOX5CVN+ArNuSuT7chzRFWasc0RH3S7ir/a3gPHhYhXGZ2mxVMDn7eGvg==
 
 dom-serializer@0:
   version "0.2.2"
