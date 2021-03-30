@@ -1,6 +1,5 @@
 import GrowthBookClient from './client';
 import { Experiment } from 'types';
-import mutate, { DeclarativeMutation } from 'dom-mutator';
 
 export function hashFnv32a(str: string): number {
   let hval = 0x811c9dc5;
@@ -120,87 +119,41 @@ export function clearAppliedDomChanges() {
   appliedDomChanges.clear();
 }
 
-export function applyDomMods({
-  dom,
-  css,
-}: {
-  dom?: DeclarativeMutation[];
-  css?: string;
-}): () => void {
-  // Only works on a browser environment
-  /* istanbul ignore next */
-  if (typeof window === 'undefined') {
-    return () => {
-      // do nothing
-    };
-  }
-
-  const revert: (() => void)[] = [];
-  if (dom?.length) {
-    dom.forEach(mutation => {
-      // Make sure we're only applying DOM changes once
-      const key = JSON.stringify(mutation);
-      if (appliedDomChanges.has(key)) {
-        return;
-      }
-      appliedDomChanges.add(key);
-
-      // Run the mutation
-      const controller = mutate.declarative(mutation);
-
-      revert.push(() => {
-        controller.revert();
-        appliedDomChanges.delete(key);
-      });
-    });
-  }
-  if (css?.length) {
-    // Make sure we're only applying CSS changes once
-    if (!appliedDomChanges.has(css)) {
-      appliedDomChanges.add(css);
-
-      const style = document.createElement('style');
-      document.head.appendChild(style);
-      style.innerHTML = css;
-
-      revert.push(() => {
-        style.remove();
-        appliedDomChanges.delete(css);
-      });
-    }
-  }
-
-  return () => {
-    revert.forEach(f => f());
-  };
+function getEqualWeights(n: number): number[] {
+  return new Array(n).fill(1 / n);
 }
 
-export function getWeightsFromOptions(experiment: Experiment) {
+export function getWeightsFromOptions<T>(experiment: Experiment<T>) {
   // Full coverage by default
   let coverage =
     typeof experiment.coverage === 'undefined' ? 1 : experiment.coverage;
   if (coverage < 0 || coverage > 1) {
     if (process.env.NODE_ENV !== 'production') {
-      console.error('Experiment coverage must be between 0 and 1 inclusive');
+      console.error('Experiment.coverage must be between 0 and 1 inclusive');
     }
     coverage = 1;
   }
 
-  let weights: number[] = Array.isArray(experiment.variations)
-    ? experiment.variations.map(v => v.weight || 0)
-    : Array(experiment.variations || 2).fill(0);
+  const equal = getEqualWeights(experiment.variations.length);
 
-  if (weights.length < 2 || weights.length > 20) {
+  let weights: number[] = experiment.weights || equal;
+
+  if (weights.length !== experiment.variations.length) {
     if (process.env.NODE_ENV !== 'production') {
-      console.error('Experiments must have between 2 and 20 variations');
+      console.error(
+        'Experiment.weights array must be the same length as Experiment.variations'
+      );
     }
-    weights = [0.5, 0.5];
+    weights = equal;
   }
 
   // If weights don't add up to 1 (or close to it), default to equal weights
   const totalWeight = weights.reduce((w, sum) => sum + w, 0);
   if (totalWeight < 0.99 || totalWeight > 1.01) {
-    weights = new Array(weights.length).fill(1 / weights.length);
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Experiment.weights must add up to 1');
+    }
+    weights = equal;
   }
 
   // Scale weights by traffic coverage

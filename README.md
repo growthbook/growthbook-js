@@ -5,13 +5,13 @@ Small utility library to run controlled experiments (i.e. A/B/n tests) in javasc
 ![Build Status](https://github.com/growthbook/growthbook-js/workflows/Build/badge.svg)
 
 -  No external dependencies
--  Lightweight and fast (4Kb gzipped)
+-  Lightweight and fast (3Kb gzipped)
 -  No HTTP requests, everything is defined and evaluated locally
 -  Supports both browser and NodeJS environments
--  Works with static pages, SPAs, React, and more
 -  Written in Typescript with an extensive test suite
 -  Advanced user and page targeting
--  Multiple implementation options
+-  Use your existing event tracking (Segment, Snowplow, Mixpanel, custom)
+-  Adjust variation weights and targeting without deploying new code
 
 ## Installation
 
@@ -41,17 +41,12 @@ const client = new GrowthBookClient();
 const user = client.user({id: "12345"});
 
 // Put the user in an experiment
-const {variation} = user.experiment({
+const {value} = user.experiment({
     key: "my-experiment",
-    variations: 2
+    variations: ["A", "B"]
 });
 
-if(variation === 1) {
-    console.log("B!");
-}
-else {
-    console.log("A!");
-}
+console.log(value); // "A" or "B"
 ```
 
 ## Experiments
@@ -64,8 +59,10 @@ There are a lot more configuration options you can specify.  Here is the full ty
 interface Experiment {
     // The globally unique tracking key for the experiment
     key: string;
-    // Number of variations, or an array with more detailed info for each variation
-    variations: number | DetailedVariationInfo[];
+    // Array of variations
+    variations: any[];
+    // How to weight traffic between variations. Array of floats that add to 1.
+    weights?: number[];
     // "running" is always active, "draft" is only active during QA. "stopped" is only active when forcing a winning variation
     status: "draft" | "running" | "stopped";
     // What percent of users should be included in the experiment. Float from 0 to 1.
@@ -75,183 +72,35 @@ interface Experiment {
     // Array of strings if the format "{key} {operator} {value}"
     // Users must pass all of these targeting rules to be included in this experiment
     targeting?: string[];
-    // If specified, all users included in the experiment should be forced into the 
-    // specified variation (0 is control, 1 is first variation, etc.)
+    // All users included in the experiment will be forced into the 
+    // specified variation index
     force?: number;
     // If true, use anonymous id for assigning, otherwise use logged-in user id
     anon: boolean;
-    // If true, users who match all targeting rules should automatically be put into the test
-    auto: boolean;
 }
-
-interface DetailedVariationInfo {
-    // The tracking key for the variation (not globally unique)
-    // Defaults to "0" for control, "1" for first variation, etc.
-    key?: string;
-    // Determines traffic split. Float from 0 to 1, weights for all variations must sum to 1.
-    // Defaults to an even split between all variations
-    weight?: number;
-    // Arbitrary data attached to the variation. Used to parameterize experiments.
-    data?: {
-        [key: string]: any;
-    };
-    // CSS rules that should be injected to the page if this variation is chosen
-    css?: string;
-    // DOM modifications that should be applied if this variation is chosen
-    dom?: {
-        selector: string;
-        // "remove" only works when attribute is "class"
-        action: "set" | "append" | "remove"
-        // any valid html attribute or the string "html" to modify innerHTML
-        attribute: string;
-        value: string;
-    }[];
-    // Callback function that is called when a user is assigned this variation
-    activate?: () => void;
-    // Cleanup function to undo any changes made in `activate`
-    deactivate?: () => void;
-};
 ```
 
 ## Running Experiments
 
-There are 4 different ways to run experiments. You can use more than one of these at a time; choose what makes sense on a case-by-case basis.
-
-### 1. Automatic (Browser Only)
-
-With the Automatic approach, users who match the targeting rules will automatically be assigned and shown a variation.
-
-Requirements:
--  Browser environment (NodeJS support is coming soon)
--  Experiment must have `auto` set to true
--  Experiment must set the `url` regex field (setting to `.*` is fine, it just can't be empty)
--  Experiment must define `variations` as an array with dom, css, and/or activate properties for at least 1 variation
-
-Here is an example experiment that meets these requirements:
+Run experiments by calling `user.experiment()` which returns an object with a few useful properties:
 
 ```ts
-// Add the experiments on the client
-client.experiments.push({
-    key: "my-automatic-experiment",
-    auto: true,
-    url: "^/post/[0-9]+",
-    variations: [
-        // Control (doesn't change the page at all)
-        {},
-        // Variation 1
-        {
-            dom: [
-                {
-                    selector: "h1",
-                    action: "set",
-                    attribute: "html",
-                    value: "My New Title"
-                }
-            ],
-            css: "h1 { color: red; }",
-            activate: () => {
-                // Arbitrary javascript
-                window.inTheVariation = true;
-            },
-            deactivate: () => {
-                // Undo whatever changes were made in `activate`
-                window.inTheVariation = false;
-            }
-        }
-    ]
-});
-```
-
-If the user lands on the url `/post/123`, they will be assigned a variation, dom/css changes will be applied, and your `activate` function will be called.
-
-### 2. Code Branching (Browser and NodeJS)
-
-With this approach, you put the user in the experiment and fork your code dependeing on the assigned variation.
-
-```ts
-const {variation} = user.experiment({
-    key: "my-branching-experiment",
-    variations: 2
+const {inExperiment, index, value} = user.experiment({
+    key: "my-experiment",
+    variations: ["A", "B"]
 });
 
-if(variation === 0) {
-    console.log('Control');
-}
-else if(variation === 1) {
-    console.log('Variation');
-}
-else if(variation === -1) {
-    console.log("Not in experiment");
-}
+// If user is part of the experiment
+console.log(inExperiment); // true or false
+
+// The index of the assigned variation
+console.log(index); // 0 or 1
+
+// The value of the assigned variation
+console.log(value); // "A" or "B"
 ```
 
-### 3. Parameterization (Browser and NodeJS)
-
-You can use Parameterization as a cleaner alternative to code branching for simple experiments.
-
-Requirements:
--  Experiment must define `variations` as an array with the `data` property for each variation
-
-Instead of branching, you would extract the data from the chosen variation:
-```ts
-// Get data from the assigned variation
-const {data} = user.experiment({
-    key: "my-parameterized-experiment",
-    variations: [
-        // Control
-        {
-            data: {
-                color: "blue"
-            }
-        },
-        // Variation
-        {
-            data: {
-                color: "green"
-            }
-        }
-    ]
-});
-
-// Use data tied to the chosen variation, no branching required
-const buttonColor = data.color || "blue";
-```
-
-### 4. Feature Flags (Browser and NodeJS)
-
-Parameterization still requires referencing experiments directly in code.  Using feature flags, you can get some of the same benefits while also keeping your code more maintainable.
-
-Requirements:
--  Experiment must define `variations` as an array with the `data` property for each variation
--  Use more descriptive data keys (e.g. `homepage.signup.color` instead of just `color`)
-
-First, add your experiment definitions to the client:
-
-```ts
-client.experiments.push({
-    key: "my-feature-flag-experiment",
-    variations: [
-        // Control
-        {
-            data: {
-                "homepage.signup.color": "blue"
-            }
-        },
-        // Variation
-        {
-            data: {
-                "homepage.signup.color": "green"
-            }
-        }
-    ]
-})
-```
-
-Now you can do a lookup based on the data key without knowing about which (if any) experiments are running:
-
-```ts
-const buttonColor = user.getFeatureFlag("homepage.signup.color") || "blue";
-```
+The `inExperiment` flag can be false if the experiment defines any sort of targeting rules which the user does not pass.  In this case, the user is always assigned index `0`.
 
 ## Client Configuration
 
@@ -267,7 +116,7 @@ Below are all of the available options:
 
 ### SPA support
 
-With a Single Page App (SPA), you need to update the client when the URL changes:
+With a Single Page App (SPA), you need to update the client on navigation in order to target tests based on URL:
 
 ```ts
 client.setUrl(newUrl);
@@ -331,9 +180,9 @@ user.setAttributes({
 Experiments can target on these user attributes with the `targeting` field.  Here's an example:
 
 ```ts
-user.experiment({
+const {inExperiment, value} = user.experiment({
     key: "my-targeted-experiment",
-    variations: 2,
+    variations: ["A", "B"],
     targeting: [
         "premium = true",
         "accountAge > 30"
@@ -341,25 +190,80 @@ user.experiment({
 })
 ```
 
-Users will only be included in the experiment if they match the targeting rules.
+If the user does not match the targeting rules, `inExperiment` will be false and they will be assigned variation index `0`.
 
-## Event Tracking
+## Tracking Metrics and Analyzing Results
 
-Typically, you'll want to track who sees which experiment so you can analyze the data later.  Here's an example of tracking with Segment:
+This library only handles assigning variations to users.  The 2 other parts required for an A/B testing platform are Tracking and Analysis.
+
+### Tracking Metrics
+
+We recommend using your existing event tracking system, whether it is Google Analytics, Mixpanel, Segment, or something custom that you've built.
+
+In addition to tracking metrics, you'll want to track when a user views an experiment:
 
 ```ts
 // Specify a tracking callback when instantiating the client
 const client = new GrowthBookClient({
     onExperimentViewed: (data) => {
+        // Example using Segment
         analytics.track("Experiment Viewed", {
             experimentId: data.experiment.key,
-            variationId: data.variationKey
+            variationId: data.index
         });
     }
 });
 ```
 
-## Using with the Growth Book App
+The data object passed to your callback has the following properties:
+-  experiment
+-  value (the assigned variation)
+-  index (the array index of the assigned variation)
+-  userId
+-  anonId
+-  userAttributes
+
+### Analysis
+
+For analysis, there are a few options:
+
+*  Online A/B testing calculators
+*  Built-in A/B test analysis in Mixpanel/Amplitude
+*  Python or R libraries and a Jupyter Notebook
+*  Use the [Growth Book App](https://www.growthbook.io)
+
+## Overriding Weights and Targeting
+
+It's common practice to adjust experiment settings after a test is live.  For example, slowly ramping up traffic, stopping a test automatically if guardrail metrics go down, or rolling out a winning variation to 100% of users.
+
+Instead of constantly changing your code, you can use client overrides.  For example, to roll out a winning variation to 100% of users:
+```ts
+client.overrides.set("experiment-key", {
+    status: 'stopped',
+    // Force variation index 1
+    force: 1
+});
+```
+
+The full list of experiment properties you can override is:
+*  status
+*  force
+*  weights
+*  coverage
+*  targeting
+*  url
+
+This data structure can be easily seralized and stored in a database or returned from an API.  There is a small helper function if you have all of your overrides in a single JSON object:
+
+```ts
+client.importOverrides({
+    "key1": {...},
+    "key2": {...},
+    ...
+})
+```
+
+## The Growth Book App
 
 Managing experiments and analyzing results at scale can be complicated, which is why we built the [Growth Book App](https://www.growthbook.io).  It's completely optional, but definitely worth checking out.
 
@@ -372,7 +276,7 @@ Managing experiments and analyzing results at scale can be complicated, which is
 Integration is super easy:
 
 1.  Create a Growth Book API key - https://docs.growthbook.io/api
-2.  Periodically fetch the latest experiment list from the API and cache in Redis, Mongo, etc.
-3.  At the start of your app, run `client.experiments.push(...listFromDB)`
+2.  Periodically fetch the latest experiment overrides from the API and cache in Redis, Mongo, etc.
+3.  At the start of your app, run `client.importOverrides(listFromCache)`
 
 Now you can start/stop tests, adjust coverage and variation weights, and apply a winning variation to 100% of traffic, all within the Growth Book App without deploying code changes to your site.

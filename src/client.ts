@@ -1,13 +1,15 @@
-import { ClientConfigInterface, UserArg, Experiment } from './types';
+import { ClientConfigInterface, UserArg, ExperimentOverride } from './types';
 import GrowthBookUser from './user';
 
 export const clients: Set<GrowthBookClient> = new Set();
 
 export default class GrowthBookClient {
   config: ClientConfigInterface;
-  experiments: Experiment[] = [];
+  overrides: Map<string, ExperimentOverride> = new Map();
   users: GrowthBookUser[] = [];
+  forcedVariations: Map<string, number> = new Map();
 
+  private subscriptions: Set<() => void> = new Set();
   private _enabled: boolean;
 
   constructor(config: Partial<ClientConfigInterface> = {}) {
@@ -39,16 +41,10 @@ export default class GrowthBookClient {
 
   disable() {
     this._enabled = false;
-    this.users.forEach(user => {
-      user.deactivateAllExperiments();
-    });
   }
 
   setUrl(url: string) {
     this.config.url = url;
-    this.users.forEach(user => {
-      user.refreshActiveExperiments();
-    });
   }
 
   user({ anonId, id, attributes }: UserArg): GrowthBookUser {
@@ -59,7 +55,13 @@ export default class GrowthBookClient {
       this
     );
     this.users.push(user);
+    this.subscriptions.forEach(s => s());
     return user;
+  }
+
+  subscribe(cb: () => void) {
+    this.subscriptions.add(cb);
+    return () => this.subscriptions.delete(cb);
   }
 
   destroy() {
@@ -67,10 +69,18 @@ export default class GrowthBookClient {
       user.destroy();
     });
     this.users = [];
-    this.experiments = [];
+    this.overrides.clear();
     this._enabled = false;
+    this.forcedVariations.clear();
+    this.subscriptions.clear();
 
     // Remove from clients set
     clients.delete(this);
+  }
+
+  importOverrides(overrides: Record<string, ExperimentOverride>) {
+    Object.keys(overrides).forEach(key => {
+      this.overrides.set(key, overrides[key]);
+    });
   }
 }
