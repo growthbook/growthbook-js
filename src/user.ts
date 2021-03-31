@@ -19,7 +19,7 @@ export default class GrowthBookUser {
     string,
     {
       assigned: number;
-      possible: number;
+      possible: any[];
     }
   > = new Map();
   private subscriptions: Set<() => void> = new Set();
@@ -72,7 +72,9 @@ export default class GrowthBookUser {
 
   subscribe(cb: () => void) {
     this.subscriptions.add(cb);
-    return () => this.subscriptions.delete(cb);
+    return () => {
+      this.subscriptions.delete(cb);
+    };
   }
 
   private alertSubscribers() {
@@ -149,9 +151,7 @@ export default class GrowthBookUser {
       if (this.assignedVariations.get(experiment.key)?.assigned !== variation) {
         this.assignedVariations.set(experiment.key, {
           assigned: variation,
-          possible: Array.isArray(experiment.variations)
-            ? experiment.variations.length
-            : experiment.variations,
+          possible: experiment.variations,
         });
         this.alertSubscribers();
       }

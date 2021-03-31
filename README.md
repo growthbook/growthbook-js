@@ -64,7 +64,7 @@ interface Experiment {
     // How to weight traffic between variations. Array of floats that add to 1.
     weights?: number[];
     // "running" is always active, "draft" is only active during QA. "stopped" is only active when forcing a winning variation
-    status: "draft" | "running" | "stopped";
+    status?: "draft" | "running" | "stopped";
     // What percent of users should be included in the experiment. Float from 0 to 1.
     coverage?: number;
     // Users can only be included in this experiment if the current URL matches this regex
@@ -76,7 +76,7 @@ interface Experiment {
     // specified variation index
     force?: number;
     // If true, use anonymous id for assigning, otherwise use logged-in user id
-    anon: boolean;
+    anon?: boolean;
 }
 ```
 
@@ -192,6 +192,37 @@ const {inExperiment, value} = user.experiment({
 
 If the user does not match the targeting rules, `inExperiment` will be false and they will be assigned variation index `0`.
 
+## Overriding Weights and Targeting
+
+It's common practice to adjust experiment settings after a test is live.  For example, slowly ramping up traffic, stopping a test automatically if guardrail metrics go down, or rolling out a winning variation to 100% of users.
+
+Instead of constantly changing your code, you can use client overrides.  For example, to roll out a winning variation to 100% of users:
+```ts
+client.overrides.set("experiment-key", {
+    status: 'stopped',
+    // Force variation index 1
+    force: 1
+});
+```
+
+The full list of experiment properties you can override is:
+*  status
+*  force
+*  weights
+*  coverage
+*  targeting
+*  url
+
+This data structure can be easily seralized and stored in a database or returned from an API.  There is a small helper function if you have all of your overrides in a single JSON object:
+
+```ts
+client.importOverrides({
+    "key1": {...},
+    "key2": {...},
+    ...
+})
+```
+
 ## Tracking Metrics and Analyzing Results
 
 This library only handles assigning variations to users.  The 2 other parts required for an A/B testing platform are Tracking and Analysis.
@@ -230,40 +261,9 @@ For analysis, there are a few options:
 *  Online A/B testing calculators
 *  Built-in A/B test analysis in Mixpanel/Amplitude
 *  Python or R libraries and a Jupyter Notebook
-*  Use the [Growth Book App](https://www.growthbook.io)
+*  The [Growth Book App](https://www.growthbook.io) (more info below)
 
-## Overriding Weights and Targeting
-
-It's common practice to adjust experiment settings after a test is live.  For example, slowly ramping up traffic, stopping a test automatically if guardrail metrics go down, or rolling out a winning variation to 100% of users.
-
-Instead of constantly changing your code, you can use client overrides.  For example, to roll out a winning variation to 100% of users:
-```ts
-client.overrides.set("experiment-key", {
-    status: 'stopped',
-    // Force variation index 1
-    force: 1
-});
-```
-
-The full list of experiment properties you can override is:
-*  status
-*  force
-*  weights
-*  coverage
-*  targeting
-*  url
-
-This data structure can be easily seralized and stored in a database or returned from an API.  There is a small helper function if you have all of your overrides in a single JSON object:
-
-```ts
-client.importOverrides({
-    "key1": {...},
-    "key2": {...},
-    ...
-})
-```
-
-## The Growth Book App
+### The Growth Book App
 
 Managing experiments and analyzing results at scale can be complicated, which is why we built the [Growth Book App](https://www.growthbook.io).  It's completely optional, but definitely worth checking out.
 
