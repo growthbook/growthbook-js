@@ -43,10 +43,6 @@ export default class GrowthBookClient {
     this._enabled = false;
   }
 
-  setUrl(url: string) {
-    this.config.url = url;
-  }
-
   user({ anonId, id, attributes }: UserArg): GrowthBookUser {
     const user = new GrowthBookUser(
       id || '',

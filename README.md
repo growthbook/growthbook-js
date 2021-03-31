@@ -8,7 +8,7 @@ Small utility library to run controlled experiments (i.e. A/B/n tests) in javasc
 -  Lightweight and fast (3Kb gzipped)
 -  No HTTP requests, everything is defined and evaluated locally
 -  Supports both browser and NodeJS environments
--  Written in Typescript with an extensive test suite
+-  Written in Typescript with 100% test coverage
 -  Advanced user and page targeting
 -  Use your existing event tracking (Segment, Snowplow, Mixpanel, custom)
 -  Adjust variation weights and targeting without deploying new code
@@ -119,7 +119,7 @@ Below are all of the available options:
 With a Single Page App (SPA), you need to update the client on navigation in order to target tests based on URL:
 
 ```ts
-client.setUrl(newUrl);
+client.config.url = newUrl;
 ```
 
 Doing this with Next.js for example, will look like this:
@@ -128,7 +128,7 @@ export default function MyApp({ Component, pageProps }) {
   const router = useRouter()
 
   useEffect(() => {
-    const onChange = (newUrl) => client.setUrl(newUrl);
+    const onChange = (newUrl) => client.config.url = newUrl;
     router.events.on('routeChangeComplete', onChange);
     return () => router.events.off('routeChangeComplete', onChange);
   }, [])

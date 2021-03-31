@@ -238,6 +238,43 @@ describe('experiments', () => {
     });
   });
 
+  it('client.subscribe fires when new users are created', () => {
+    let count = 0;
+    const client = new GrowthBookClient();
+    client.user({ id: '1' });
+    client.subscribe(() => {
+      count++;
+    });
+
+    client.user({ id: '2' });
+    client.user({ id: '3' });
+    client.user({ id: '4' });
+
+    expect(count).toEqual(3);
+
+    client.destroy();
+  });
+
+  it('imports experiment overrides', () => {
+    const client = new GrowthBookClient();
+    client.importOverrides({
+      'my-test': {
+        coverage: 0.5,
+        status: 'draft',
+      },
+      'my-test2': {
+        coverage: 1,
+        status: 'running',
+      },
+    });
+    expect(client.overrides.size).toEqual(2);
+    expect(client.overrides.get('my-test')).toEqual({
+      coverage: 0.5,
+      status: 'draft',
+    });
+    client.destroy();
+  });
+
   it('handles weird experiment values', () => {
     const spy = jest.spyOn(console, 'error').mockImplementation();
 
@@ -289,6 +326,34 @@ describe('experiments', () => {
     ).toEqual([0.25, 0.25, 0.25, 0.25]);
 
     spy.mockRestore();
+  });
+
+  it('logs debug message', () => {
+    const spy = jest.spyOn(console, 'log').mockImplementation();
+
+    const client = new GrowthBookClient();
+    const user = client.user({ id: '1' });
+    user.experiment({
+      key: 'my-test',
+      variations: [0, 1],
+    });
+
+    // Does not log normally
+    expect(spy.mock.calls.length).toEqual(0);
+
+    // Logs when in debug mode
+    client.config.debug = true;
+    user.experiment({
+      key: 'my-test2',
+      variations: [0, 1],
+    });
+    // Should be
+    // 1. Trying to put user in experiment
+    // 2. User put in experiment
+    expect(spy.mock.calls.length).toEqual(2);
+    spy.mockRestore();
+
+    client.destroy();
   });
 
   it('uses window.location.href by default', () => {
@@ -680,7 +745,7 @@ describe('experiments', () => {
   it('fires user subscriptions correctly', () => {
     const user = client.user({ id: '1' });
     let fired = false;
-    user.subscribe(() => {
+    const unsubscriber = user.subscribe(() => {
       fired = true;
     });
     expect(fired).toEqual(false);
@@ -695,6 +760,16 @@ describe('experiments', () => {
     fired = false;
     user.experiment(exp);
     expect(fired).toEqual(false);
+
+    // Does not fire after unsubscribed
+    unsubscriber();
+    user.experiment({
+      key: 'other-test',
+      variations: [0, 1],
+    });
+    expect(fired).toEqual(false);
+
+    user.destroy();
   });
 
   it('stores assigned variations in the user', () => {
