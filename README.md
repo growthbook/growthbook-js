@@ -5,12 +5,12 @@ Small utility library to run controlled experiments (i.e. A/B/n tests) in javasc
 ![Build Status](https://github.com/growthbook/growthbook-js/workflows/Build/badge.svg)
 
 -  No external dependencies
--  Lightweight and fast (3Kb gzipped)
+-  Lightweight and fast (<3Kb gzipped)
 -  No HTTP requests, everything is defined and evaluated locally
 -  Supports both browser and NodeJS environments
 -  Written in Typescript with 100% test coverage
 -  Advanced user and page targeting
--  Use your existing event tracking (Segment, Snowplow, Mixpanel, custom)
+-  Use your existing event tracking (GA, Segment, Snowplow, Mixpanel, custom)
 -  Adjust variation weights and targeting without deploying new code
 
 ## Installation
