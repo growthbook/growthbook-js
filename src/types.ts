@@ -1,12 +1,4 @@
-import { DeclarativeMutation } from 'dom-mutator';
-
 export interface UserAttributes {
-  [key: string]: unknown;
-}
-export interface ExperimentData {
-  [key: string]: unknown[];
-}
-export interface VariationData {
   [key: string]: unknown;
 }
 
@@ -22,36 +14,23 @@ export type UserArg =
       attributes?: UserAttributes;
     };
 
-export interface ExperimentResults {
-  variation: number;
-  experiment?: Experiment;
-  data?: VariationData;
-  activate: () => void;
-  deactivate: () => void;
+export interface ExperimentResults<T = any> {
+  value: T;
+  index: number;
+  inExperiment: boolean;
+  experiment?: Experiment<T>;
 }
 
-export interface DataLookupResults<T = unknown> {
-  experiment?: Experiment;
-  variation?: number;
+export interface DataLookupResults<T = any> {
+  experiment?: Experiment<T>;
+  index?: number;
   value: T | undefined;
 }
 
-export interface VariationInfo {
-  key?: string;
-  weight?: number;
-  data?: {
-    [key: string]: unknown;
-  };
-  dom?: DeclarativeMutation[];
-  css?: string;
-  activate?: () => void;
-  deactivate?: () => void;
-}
-
-export interface Experiment {
+export interface Experiment<T> {
   key: string;
-  variations: number | VariationInfo[];
-  auto?: boolean;
+  variations: T[];
+  weights?: number[];
   anon?: boolean;
   status?: 'draft' | 'running' | 'stopped';
   force?: number;
@@ -60,16 +39,22 @@ export interface Experiment {
   url?: string;
 }
 
-export type TrackExperimentFunctionProps = {
-  experiment: Experiment;
-  variation: number;
-  variationKey: string;
+export interface ExperimentOverride {
+  weights?: number[];
+  status?: 'draft' | 'running' | 'stopped';
+  force?: number;
+  coverage?: number;
+  targeting?: string[];
+  url?: string;
+}
+
+export type TrackExperimentFunctionProps<T = any> = {
+  experiment: Experiment<T>;
+  value: T;
+  index: number;
   userId?: string;
   anonId?: string;
-  data?: VariationData;
   userAttributes?: UserAttributes;
-  dom?: DeclarativeMutation[];
-  css?: string;
 };
 
 export type TrackExperimentFunction = (
@@ -79,6 +64,7 @@ export type TrackExperimentFunction = (
 export interface ClientConfigInterface {
   url?: string;
   debug?: boolean;
+  qa?: boolean;
   onExperimentViewed?: TrackExperimentFunction;
   enableQueryStringOverride?: boolean;
 }
