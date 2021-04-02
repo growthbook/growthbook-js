@@ -1,6 +1,6 @@
 # Growth Book Javascript Library
 
-Small utility library to run controlled experiments (i.e. A/B/n tests) in javascript.
+Powerful A/B testing for JavaScript.
 
 ![Build Status](https://github.com/growthbook/growthbook-js/workflows/Build/badge.svg)
 
@@ -35,7 +35,13 @@ import GrowthBookClient from 'https://unpkg.com/@growthbook/growthbook/dist/grow
 ```ts
 import GrowthBookClient from '@growthbook/growthbook';
 
-const client = new GrowthBookClient();
+// Create a client and setup tracking
+const client = new GrowthBookClient({
+  onExperimentViewed: ({experimentId, variationId}) => {
+    // Use whatever event tracking system you have in place
+    analytics.track("Experiment Viewed", {experimentId, variationId});
+  }
+});
 
 // Define the user that you want to run an experiment on
 const user = client.user({id: "12345"});
@@ -85,7 +91,7 @@ interface Experiment {
 Run experiments by calling `user.experiment()` which returns an object with a few useful properties:
 
 ```ts
-const {inExperiment, index, value} = user.experiment({
+const {inExperiment, variationId, value} = user.experiment({
     key: "my-experiment",
     variations: ["A", "B"]
 });
@@ -94,13 +100,13 @@ const {inExperiment, index, value} = user.experiment({
 console.log(inExperiment); // true or false
 
 // The index of the assigned variation
-console.log(index); // 0 or 1
+console.log(variationId); // 0 or 1
 
 // The value of the assigned variation
 console.log(value); // "A" or "B"
 ```
 
-The `inExperiment` flag can be false if the experiment defines any sort of targeting rules which the user does not pass.  In this case, the user is always assigned index `0`.
+The `inExperiment` flag can be false if the experiment defines any sort of targeting rules which the user does not pass.  In this case, the user is always assigned variation index `0`.
 
 ## Client Configuration
 
@@ -110,7 +116,7 @@ Below are all of the available options:
 
 -  **enabled** - Default true. Set to false to completely disable all experiments.
 -  **debug** - Default false. If set to true, console.log info about why experiments are run and why specific variations are chosen.
--  **onExperimentViewed** - Callback when the user views an experiment. Passed an object with `experiment` and `variation` properties.
+-  **onExperimentViewed** - Callback when the user views an experiment.
 -  **url** - The URL for the current request (defaults to `window.location.href` when in a browser)
 -  **enableQueryStringOverride** - Default true.  If true, enables forcing variations via the URL.  Very useful for QA.  https://example.com/?my-experiment=1
 
@@ -223,36 +229,59 @@ client.importOverrides({
 })
 ```
 
-## Tracking Metrics and Analyzing Results
+## Event Tracking and Analyzing Results
 
 This library only handles assigning variations to users.  The 2 other parts required for an A/B testing platform are Tracking and Analysis.
 
-### Tracking Metrics
+### Tracking
 
-We recommend using your existing event tracking system, whether it is Google Analytics, Mixpanel, Segment, or something custom that you've built.
+It's likely you already have some event tracking on your site with the metrics you want to optimize (Google Analytics, Segment, Mixpanel, etc.).
 
-In addition to tracking metrics, you'll want to track when a user views an experiment:
+For A/B tests, you just need to track one additional event - when someone views a variation.  
 
 ```ts
 // Specify a tracking callback when instantiating the client
 const client = new GrowthBookClient({
-    onExperimentViewed: (data) => {
-        // Example using Segment
-        analytics.track("Experiment Viewed", {
-            experimentId: data.experiment.key,
-            variationId: data.index
-        });
+    onExperimentViewed: ({experimentId, variationId}) => {
+      // ...
     }
 });
 ```
 
-The data object passed to your callback has the following properties:
--  experiment
--  value (the assigned variation)
--  index (the array index of the assigned variation)
+The object passed to your callback has the following properties:
+-  experimentId (the key of the experiment)
+-  variationId (the array index of the assigned variation)
+-  value (the value of the assigned variation)
+-  experiment (the full experiment object)
 -  userId
 -  anonId
 -  userAttributes
+
+Below are examples for a few popular event tracking tools:
+
+#### Google Analytics
+```ts
+ga('send', 'event', 'experiment', experimentId, variationId, {
+  // Custom dimension for easier analysis
+  'dimension1': `${experimentId}::${variationId}`
+});
+```
+
+#### Segment
+```ts
+analytics.track("Experiment Viewed", {
+  experimentId,
+  variationId
+});
+```
+
+#### Mixpanel
+```ts
+mixpanel.track("$experiment_started", {
+  'Experiment name': experimentId,
+  'Variant name': variationId
+});
+```
 
 ### Analysis
 

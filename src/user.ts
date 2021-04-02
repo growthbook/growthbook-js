@@ -157,13 +157,14 @@ export default class GrowthBookUser {
       }
     }
 
-    const index = variation >= 0 ? variation : 0;
+    const variationId = variation >= 0 ? variation : 0;
 
     return {
       experiment,
       inExperiment: variation >= 0,
-      index,
-      value: experiment ? experiment.variations[index] : undefined,
+      variationId,
+      index: variationId,
+      value: experiment ? experiment.variations[variationId] : undefined,
     };
   }
 
@@ -301,7 +302,9 @@ export default class GrowthBookUser {
       if (this.client.config.onExperimentViewed) {
         this.client.config.onExperimentViewed({
           experiment,
+          experimentId: experiment.key,
           index: variation,
+          variationId: variation,
           value: experiment.variations[variation],
           [anon ? 'anonId' : 'userId']: userId,
           userAttributes: this.attributes,

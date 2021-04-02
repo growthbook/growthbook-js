@@ -16,15 +16,11 @@ export type UserArg =
 
 export interface ExperimentResults<T = any> {
   value: T;
+  /** @deprecated */
   index: number;
+  variationId: number;
   inExperiment: boolean;
   experiment?: Experiment<T>;
-}
-
-export interface DataLookupResults<T = any> {
-  experiment?: Experiment<T>;
-  index?: number;
-  value: T | undefined;
 }
 
 export interface Experiment<T> {
@@ -49,8 +45,11 @@ export interface ExperimentOverride {
 }
 
 export type TrackExperimentFunctionProps<T = any> = {
+  experimentId: string;
+  variationId: number;
   experiment: Experiment<T>;
   value: T;
+  /** @deprecated */
   index: number;
   userId?: string;
   anonId?: string;

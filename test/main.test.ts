@@ -35,11 +35,11 @@ const chooseVariation = <T = number>(
       key: experiment,
       variations: [0, 1],
     });
-    return res.inExperiment ? res.index : -1;
+    return res.inExperiment ? res.variationId : -1;
   }
 
   const res = user.experiment(experiment);
-  return res.inExperiment ? res.index : -1;
+  return res.inExperiment ? res.variationId : -1;
 };
 
 Object.defineProperty(window, 'location', {
@@ -196,23 +196,29 @@ describe('experiments', () => {
 
     expect(mock.calls.length).toEqual(3);
     expect(mock.calls[0][0]).toEqual({
+      experimentId: exp1.key,
       experiment: exp1,
       value: 1,
       index: 1,
+      variationId: 1,
       userId: '1',
       userAttributes: {},
     });
     expect(mock.calls[1][0]).toEqual({
+      experimentId: exp2.key,
       experiment: exp2,
       value: 0,
       index: 0,
+      variationId: 0,
       userId: '1',
       userAttributes: {},
     });
     expect(mock.calls[2][0]).toEqual({
+      experimentId: exp2.key,
       experiment: exp2,
       value: 1,
       index: 1,
+      variationId: 1,
       userId: '2',
       userAttributes: {},
     });
@@ -230,9 +236,11 @@ describe('experiments', () => {
 
     expect(mock.calls.length).toEqual(1);
     expect(mock.calls[0][0]).toEqual({
+      experimentId: exp.key,
       experiment: exp,
       value: 'second',
       index: 1,
+      variationId: 1,
       userId: '1',
       userAttributes: {},
     });
@@ -666,7 +674,7 @@ describe('experiments', () => {
     };
 
     const res1 = user.experiment(exp);
-    expect(res1.index).toEqual(1);
+    expect(res1.variationId).toEqual(1);
     expect(res1.value).toEqual({
       color: 'green',
       size: 'large',
@@ -676,7 +684,7 @@ describe('experiments', () => {
     exp.coverage = 0.01;
     const res2 = user.experiment(exp);
     expect(res2.inExperiment).toEqual(false);
-    expect(res2.index).toEqual(0);
+    expect(res2.variationId).toEqual(0);
     expect(res2.value).toEqual({
       color: 'blue',
       size: 'small',
