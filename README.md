@@ -1,17 +1,20 @@
-# Growth Book Javascript Library
+<p align="center"><img src="https://www.growthbook.io/logos/growthbook-logo@2x.png" width="400px" /></p>
+
+# Growth Book - Javascript
 
 Powerful A/B testing for JavaScript.
 
 ![Build Status](https://github.com/growthbook/growthbook-js/workflows/Build/badge.svg)
 
--  No external dependencies
--  Lightweight and fast (<3Kb gzipped)
--  No HTTP requests, everything is defined and evaluated locally
--  Supports both browser and NodeJS environments
--  Written in Typescript with 100% test coverage
--  Advanced user and page targeting
--  Use your existing event tracking (GA, Segment, Snowplow, Mixpanel, custom)
--  Adjust variation weights and targeting without deploying new code
+-  **No external dependencies**
+-  **Lightweight and fast** (2.2Kb gzipped)
+-  **No HTTP requests** everything is defined and evaluated locally
+-  Supports both **browsers and nodejs**
+-  **No flickering or blocking calls**
+-  Written in **Typescript** with 100% test coverage
+-  **Advanced user and page targeting**
+-  **Use your existing event tracking** (GA, Segment, Mixpanel, custom)
+-  **Adjust variation weights and targeting** without deploying new code
 
 ## Installation
 
