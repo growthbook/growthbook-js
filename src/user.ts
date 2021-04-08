@@ -147,7 +147,7 @@ export default class GrowthBookUser {
     variation: number = -1
   ): ExperimentResults {
     // Update the variation the user was assigned
-    if (experiment && variation >= 0) {
+    if (experiment) {
       if (this.assignedVariations.get(experiment.key)?.assigned !== variation) {
         this.assignedVariations.set(experiment.key, {
           assigned: variation,
