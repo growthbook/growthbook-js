@@ -90,10 +90,7 @@ export default class GrowthBookUser {
     }
   }
 
-  private isIncluded<T>(experiment: Experiment<T>): boolean {
-    const isForced =
-      'force' in experiment || this.client.forcedVariations.has(experiment.key);
-
+  private isValidExperiment<T>(experiment: Experiment<T>): boolean {
     const numVariations = experiment.variations.length;
     if (numVariations < 2) {
       this.log(
@@ -102,16 +99,25 @@ export default class GrowthBookUser {
       return false;
     }
 
-    if (experiment.status === 'draft' && !isForced) {
-      this.log('experiment in draft mode');
-      return false;
+    const isForced =
+      'force' in experiment || this.client.forcedVariations.has(experiment.key);
+
+    if (!isForced) {
+      if (experiment.status === 'draft') {
+        this.log('experiment in draft mode');
+        return false;
+      }
+
+      if (experiment.status === 'stopped') {
+        this.log('experiment is stopped');
+        return false;
+      }
     }
 
-    if (experiment.status === 'stopped' && !isForced) {
-      this.log('experiment is stopped');
-      return false;
-    }
+    return true;
+  }
 
+  private isIncluded<T>(experiment: Experiment<T>): boolean {
     // Missing required type of user id
     const userId = experiment?.anon ? this.anonId : this.id;
     if (!userId) {
@@ -195,12 +201,12 @@ export default class GrowthBookUser {
       }
     }
 
-    if (!this.isIncluded(experiment)) {
-      this.log('not included in experiment, assigning variation -1');
+    if (!this.isValidExperiment(experiment)) {
+      this.log('not a valid experiment, assigning variation -1');
       return this.getExperimentResults(experiment);
     }
 
-    // Forced via a client override
+    // Forced via the client (only used during development)
     if (this.client.forcedVariations.has(experiment.key)) {
       return this.getExperimentResults(
         experiment,
@@ -208,7 +214,13 @@ export default class GrowthBookUser {
       );
     }
 
-    // Experiment variation is forced
+    // If it fails targeting rules
+    if (!this.isIncluded(experiment)) {
+      this.log('not included in experiment, assigning variation -1');
+      return this.getExperimentResults(experiment);
+    }
+
+    // Forced in the experiment definition itself
     if (experiment.force !== undefined && experiment.force !== null) {
       this.log('variation forced to ' + experiment.force);
       return this.getExperimentResults(experiment, experiment.force);
