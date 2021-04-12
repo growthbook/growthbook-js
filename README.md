@@ -28,7 +28,7 @@ or use directly in your HTML without installing first:
 
 ```html
 <script type="module">
-import GrowthBookClient from 'https://unpkg.com/@growthbook/growthbook/dist/growthbook.esm.min.js';
+import GrowthBookClient from 'https://unpkg.com/@growthbook/growthbook/dist/growthbook.esm.js';
 //...
 </script>
 ```
