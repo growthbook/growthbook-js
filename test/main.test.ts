@@ -199,7 +199,7 @@ describe('experiments', () => {
       index: 1,
       variationId: 1,
       user: user1,
-      userHashKey: 'id',
+      randomizationUnit: 'id',
     });
     expect(mock.calls[1][0]).toEqual({
       experimentId: exp2.key,
@@ -208,7 +208,7 @@ describe('experiments', () => {
       index: 0,
       variationId: 0,
       user: user1,
-      userHashKey: 'id',
+      randomizationUnit: 'id',
     });
     expect(mock.calls[2][0]).toEqual({
       experimentId: exp2.key,
@@ -217,7 +217,7 @@ describe('experiments', () => {
       index: 1,
       variationId: 1,
       user: user2,
-      userHashKey: 'id',
+      randomizationUnit: 'id',
     });
   });
 
@@ -239,7 +239,7 @@ describe('experiments', () => {
       index: 1,
       variationId: 1,
       user,
-      userHashKey: 'id',
+      randomizationUnit: 'id',
     });
   });
 
@@ -451,7 +451,7 @@ describe('experiments', () => {
       const { inExperiment, variationId } = user.experiment({
         key: 'my-test',
         variations: [0, 1],
-        userHashKey: 'companyId',
+        randomizationUnit: 'companyId',
       });
       expect({
         inExperiment,

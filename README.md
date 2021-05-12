@@ -110,7 +110,7 @@ There are a lot more configuration options you can specify.  Here is the full li
 -  **include** (`() => boolean`) - A callback that returns true if the user should be part of the experiment and false if they should not be
 -  **groups** (`string[]`) - Limits the experiment to specific user groups
 -  **force** (`number`) - All users included in the experiment will be forced into the specific variation index
--  **userHashKey** - What user attribute you want to use to assign variations (defaults to `id`)
+-  **randomizationUnit** - What user attribute you want to use to assign variations (defaults to `id`)
 
 ### Running Experiments
 
@@ -182,7 +182,7 @@ const user = client.user({
 user.experiment({
   key: "by-company-id",
   variations: ["A", "B"],
-  userHashKey: "companyId"
+  randomizationUnit: "companyId"
 })
 // Users in the same company will now always get the same variation
 ```
@@ -258,7 +258,7 @@ The object passed to your callback has the following properties:
 -  value (the value of the assigned variation)
 -  experiment (the full experiment object)
 -  user (the full user object)
--  userHashKey (which user attribute was used to assign a variation)
+-  randomizationUnit (which user attribute was used to assign a variation)
 
 Below are examples for a few popular event tracking tools:
 

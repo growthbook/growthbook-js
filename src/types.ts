@@ -15,7 +15,7 @@ export interface Experiment<T, U extends Record<string, any> = {}> {
   key: string;
   variations: T[];
   weights?: number[];
-  userHashKey?: keyof U;
+  randomizationUnit?: keyof U;
   include?: () => boolean;
   groups?: string[];
   status?: 'draft' | 'running' | 'stopped';
@@ -47,7 +47,7 @@ export type TrackExperimentFunctionProps<
   variationId: number;
   experiment: Experiment<T, U>;
   value: T;
-  userHashKey: string;
+  randomizationUnit: string;
   user: U;
   /** @deprecated */
   index: number;

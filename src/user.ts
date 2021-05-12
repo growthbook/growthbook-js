@@ -54,6 +54,14 @@ export default class GrowthBookUser<U extends Record<string, string>> {
     };
   }
 
+  getIds(): U {
+    return { ...this.ids };
+  }
+
+  getGroups(): Record<string, boolean> {
+    return { ...this.groups };
+  }
+
   private alertSubscribers() {
     this.subscriptions.forEach(s => s());
   }
@@ -99,11 +107,11 @@ export default class GrowthBookUser<U extends Record<string, string>> {
   }
 
   private isIncluded<T>(experiment: Experiment<T, U>): boolean {
-    // Missing userHashKey
-    const userHashKey = this.getUserHashKey(experiment);
-    if (!(this.ids as any)[userHashKey || 'id']) {
+    // Missing randomizationUnit
+    const randomizationUnit = this.getRandomizationUnit(experiment);
+    if (!(this.ids as any)[randomizationUnit || 'id']) {
       if (process.env.NODE_ENV !== 'production')
-        this.log('user missing required id: ' + userHashKey);
+        this.log('user missing required id: ' + randomizationUnit);
       return false;
     }
 
@@ -235,8 +243,8 @@ export default class GrowthBookUser<U extends Record<string, string>> {
 
     const weights = getWeightsFromOptions(experiment);
 
-    const userHashKey = this.getUserHashKey(experiment);
-    const userHashValue = this.ids[userHashKey];
+    const randomizationUnit = this.getRandomizationUnit(experiment);
+    const userHashValue = this.ids[randomizationUnit];
 
     // Hash unique id and experiment id to randomly choose a variation given weights
     const variation = chooseVariation(userHashValue, experiment.key, weights);
@@ -244,8 +252,8 @@ export default class GrowthBookUser<U extends Record<string, string>> {
 
     if (process.env.NODE_ENV !== 'production')
       this.log(
-        'user put in experiment using hash key `' +
-          userHashKey +
+        'user put in experiment using randomization unit `' +
+          randomizationUnit +
           '`, assigned variation ' +
           variation
       );
@@ -266,8 +274,8 @@ export default class GrowthBookUser<U extends Record<string, string>> {
     return this.runExperiment(experiment);
   }
 
-  private getUserHashKey<T>(exp: Experiment<T, U>): keyof U {
-    if (exp.userHashKey) return exp.userHashKey;
+  private getRandomizationUnit<T>(exp: Experiment<T, U>): keyof U {
+    if (exp.randomizationUnit) return exp.randomizationUnit;
     return exp.anon ? 'anonId' : 'id';
   }
 
@@ -289,15 +297,19 @@ export default class GrowthBookUser<U extends Record<string, string>> {
   }
 
   private trackView<T>(experiment: Experiment<T, U>, variation: number) {
-    const userHashKey = this.getUserHashKey(experiment);
-    const userHashValue = this.ids[userHashKey];
+    const randomizationUnit = this.getRandomizationUnit(experiment);
+    const userHashValue = this.ids[randomizationUnit];
 
     // Only track an experiment once per user/test
     if (
       variation !== -1 &&
-      !this.experimentsTracked.has(userHashKey + userHashValue + experiment.key)
+      !this.experimentsTracked.has(
+        randomizationUnit + userHashValue + experiment.key
+      )
     ) {
-      this.experimentsTracked.add(userHashKey + userHashValue + experiment.key);
+      this.experimentsTracked.add(
+        randomizationUnit + userHashValue + experiment.key
+      );
 
       if (this.client.config.onExperimentViewed) {
         this.client.config.onExperimentViewed({
@@ -305,7 +317,7 @@ export default class GrowthBookUser<U extends Record<string, string>> {
           experimentId: experiment.key,
           index: variation,
           user: this,
-          userHashKey: userHashKey as string,
+          randomizationUnit: randomizationUnit as string,
           variationId: variation,
           value: experiment.variations[variation],
         });
