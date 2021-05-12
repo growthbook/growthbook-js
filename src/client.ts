@@ -1,4 +1,4 @@
-import { ClientConfigInterface, UserArg, ExperimentOverride } from './types';
+import { ClientConfigInterface, ExperimentOverride } from './types';
 import GrowthBookUser from './user';
 
 export const clients: Set<GrowthBookClient> = new Set();
@@ -6,7 +6,7 @@ export const clients: Set<GrowthBookClient> = new Set();
 export default class GrowthBookClient {
   config: ClientConfigInterface;
   overrides: Map<string, ExperimentOverride> = new Map();
-  users: GrowthBookUser[] = [];
+  users: GrowthBookUser<any>[] = [];
   forcedVariations: Map<string, number> = new Map();
 
   private subscriptions: Set<() => void> = new Set();
@@ -43,13 +43,11 @@ export default class GrowthBookClient {
     this._enabled = false;
   }
 
-  user({ anonId, id, attributes }: UserArg): GrowthBookUser {
-    const user = new GrowthBookUser(
-      id || '',
-      anonId || '',
-      attributes || {},
-      this
-    );
+  user<U extends Record<string, string>>(
+    ids: U,
+    groups?: string[]
+  ): GrowthBookUser<U> {
+    const user = new GrowthBookUser(ids, groups || [], this);
     this.users.push(user);
     this.subscriptions.forEach(s => s());
     return user;

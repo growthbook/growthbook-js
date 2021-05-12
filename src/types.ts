@@ -1,38 +1,31 @@
-export interface UserAttributes {
-  [key: string]: unknown;
-}
-
-export type UserArg =
-  | {
-      anonId: string;
-      id?: string;
-      attributes?: UserAttributes;
-    }
-  | {
-      anonId?: string;
-      id: string;
-      attributes?: UserAttributes;
-    };
-
-export interface ExperimentResults<T = any> {
+export interface ExperimentResults<
+  T = any,
+  U extends Record<string, any> = {}
+> {
   value: T;
-  /** @deprecated */
-  index: number;
   variationId: number;
   inExperiment: boolean;
-  experiment?: Experiment<T>;
+  /** @deprecated */
+  index: number;
+  /** @deprecated */
+  experiment?: Experiment<T, U>;
 }
 
-export interface Experiment<T> {
+export interface Experiment<T, U extends Record<string, any> = {}> {
   key: string;
   variations: T[];
   weights?: number[];
-  anon?: boolean;
+  userHashKey?: keyof U;
+  include?: () => boolean;
+  groups?: string[];
   status?: 'draft' | 'running' | 'stopped';
   force?: number;
   coverage?: number;
-  targeting?: string[];
   url?: string;
+  /** @deprecated */
+  targeting?: string[];
+  /** @deprecated */
+  anon?: boolean;
 }
 
 export interface ExperimentOverride {
@@ -40,20 +33,30 @@ export interface ExperimentOverride {
   status?: 'draft' | 'running' | 'stopped';
   force?: number;
   coverage?: number;
-  targeting?: string[];
+  groups?: string[];
   url?: string;
+  /** @deprecated */
+  targeting?: string[];
 }
 
-export type TrackExperimentFunctionProps<T = any> = {
+export type TrackExperimentFunctionProps<
+  T = any,
+  U extends Record<string, any> = {}
+> = {
   experimentId: string;
   variationId: number;
-  experiment: Experiment<T>;
+  experiment: Experiment<T, U>;
   value: T;
+  userHashKey: string;
+  user: U;
   /** @deprecated */
   index: number;
+  /** @deprecated */
   userId?: string;
+  /** @deprecated */
   anonId?: string;
-  userAttributes?: UserAttributes;
+  /** @deprecated */
+  userAttributes?: any;
 };
 
 export type TrackExperimentFunction = (

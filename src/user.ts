@@ -1,6 +1,5 @@
-import { UserAttributes, Experiment, ExperimentResults } from './types';
+import { Experiment, ExperimentResults } from './types';
 import {
-  checkRule,
   getWeightsFromOptions,
   chooseVariation,
   getQueryStringOverride,
@@ -8,13 +7,11 @@ import {
 } from './util';
 import GrowthBookClient from 'client';
 
-export default class GrowthBookUser {
-  private id: string;
-  private anonId: string;
-  private attributes: UserAttributes;
+export default class GrowthBookUser<U extends Record<string, string>> {
+  private ids: U;
+  private groups: string[];
   client: GrowthBookClient;
   private experimentsTracked: Set<string>;
-  private attributeMap: Map<string, string>;
   private assignedVariations: Map<
     string,
     {
@@ -24,35 +21,12 @@ export default class GrowthBookUser {
   > = new Map();
   private subscriptions: Set<() => void> = new Set();
 
-  constructor(
-    id: string,
-    anonId: string,
-    attributes: UserAttributes = {},
-    client: GrowthBookClient
-  ) {
-    this.id = id;
-    this.anonId = anonId;
-    this.attributes = attributes;
+  constructor(ids: U, groups: string[], client: GrowthBookClient) {
+    this.ids = { ...ids };
+    this.groups = groups.concat([]);
     this.client = client;
 
     this.experimentsTracked = new Set();
-    this.attributeMap = new Map();
-    this.updateAttributeMap();
-  }
-
-  setAttributes(attributes: UserAttributes, merge: boolean = false) {
-    if (merge) {
-      Object.assign(this.attributes, attributes);
-    } else {
-      this.attributes = attributes;
-    }
-
-    this.updateAttributeMap();
-    return this;
-  }
-
-  getAttributes(): UserAttributes {
-    return this.attributes;
   }
 
   destroy() {
@@ -61,7 +35,6 @@ export default class GrowthBookUser {
 
     // Clean up maps
     this.assignedVariations.clear();
-    this.attributeMap.clear();
 
     // Remove user from client
     const index = this.client.users.indexOf(this);
@@ -83,14 +56,11 @@ export default class GrowthBookUser {
 
   private log(msg: string) {
     if (this.client.config.debug) {
-      console.log(msg, {
-        userId: this.id,
-        anonId: this.anonId,
-      });
+      console.log(msg, this.ids);
     }
   }
 
-  private isValidExperiment<T>(experiment: Experiment<T>): boolean {
+  private isValidExperiment<T>(experiment: Experiment<T, U>): boolean {
     const numVariations = experiment.variations.length;
     if (numVariations < 2) {
       this.log(
@@ -117,21 +87,35 @@ export default class GrowthBookUser {
     return true;
   }
 
-  private isIncluded<T>(experiment: Experiment<T>): boolean {
-    // Missing required type of user id
-    const userId = experiment?.anon ? this.anonId : this.id;
-    if (!userId) {
-      this.log(
-        'experiment requires ' +
-          (experiment?.anon ? 'anonId' : 'userId') +
-          ' to be set'
-      );
+  private userInGroup(group: string): boolean {
+    return this.groups.includes(group);
+  }
+
+  private isIncluded<T>(experiment: Experiment<T, U>): boolean {
+    // Missing userHashKey
+    const userHashKey = this.getUserHashKey(experiment);
+    if (!(this.ids as any)[userHashKey || 'id']) {
+      this.log('user missing required id: ' + userHashKey);
       return false;
     }
 
-    // Experiment has targeting rules, check if user matches
-    if (experiment.targeting && !this.isTargeted(experiment.targeting)) {
-      this.log('failed experiment targeting rules');
+    // Custom include callback
+    if (experiment.include && !experiment.include()) {
+      this.log('the `include` callback returned false');
+      return false;
+    }
+
+    // Only specific user groups allowed
+    if (
+      experiment.groups &&
+      !experiment.groups.filter(g => this.userInGroup(g)).length
+    ) {
+      this.log(
+        'experiment limited to groups ' +
+          JSON.stringify(experiment.groups) +
+          ', user in groups ' +
+          JSON.stringify(this.groups)
+      );
       return false;
     }
 
@@ -149,9 +133,9 @@ export default class GrowthBookUser {
   }
 
   private getExperimentResults<T>(
-    experiment?: Experiment<T>,
+    experiment: Experiment<T, U>,
     variation: number = -1
-  ): ExperimentResults {
+  ): ExperimentResults<T, U> {
     // Update the variation the user was assigned
     if (experiment) {
       if (this.assignedVariations.get(experiment.key)?.assigned !== variation) {
@@ -170,14 +154,14 @@ export default class GrowthBookUser {
       inExperiment: variation >= 0,
       variationId,
       index: variationId,
-      value: experiment ? experiment.variations[variationId] : undefined,
+      value: experiment.variations[variationId],
     };
   }
 
   private runExperiment<T>(
-    experiment: Experiment<T>,
+    experiment: Experiment<T, U>,
     isOverride: boolean = false
-  ): ExperimentResults<T> {
+  ): ExperimentResults<T, U> {
     this.log('Trying to put user in experiment ' + experiment.key);
 
     if (isOverride) {
@@ -233,18 +217,24 @@ export default class GrowthBookUser {
 
     const weights = getWeightsFromOptions(experiment);
 
-    const userId = experiment?.anon ? this.anonId : this.id;
+    const userHashKey = this.getUserHashKey(experiment);
+    const userHashValue = this.ids[userHashKey];
 
     // Hash unique id and experiment id to randomly choose a variation given weights
-    const variation = chooseVariation(userId, experiment.key, weights);
-    this.trackView(experiment, variation, userId, experiment.anon);
+    const variation = chooseVariation(userHashValue, experiment.key, weights);
+    this.trackView(experiment, variation);
 
-    this.log('user put in experiment, assigned variation ' + variation);
+    this.log(
+      'user put in experiment using hash key `' +
+        userHashKey +
+        '`, assigned variation ' +
+        variation
+    );
 
     return this.getExperimentResults(experiment, variation);
   }
 
-  experiment<T>(experiment: Experiment<T>): ExperimentResults<T> {
+  experiment<T>(experiment: Experiment<T, U>): ExperimentResults<T, U> {
     const override = this.client.overrides.get(experiment.key);
     if (override) {
       const exp = {
@@ -257,20 +247,9 @@ export default class GrowthBookUser {
     return this.runExperiment(experiment);
   }
 
-  private isTargeted(rules: string[]): boolean {
-    for (let i = 0; i < rules.length; i++) {
-      const parts = rules[i].split(' ', 3);
-      if (
-        !checkRule(
-          this.attributeMap.get(parts[0]) || '',
-          parts[1] || '',
-          parts[2].trim() || ''
-        )
-      ) {
-        return false;
-      }
-    }
-    return true;
+  private getUserHashKey<T>(exp: Experiment<T, U>): keyof U {
+    if (exp.userHashKey) return exp.userHashKey;
+    return exp.anon ? 'anonId' : 'id';
   }
 
   private flattenUserValues(prefix: string, val: any) {
@@ -289,37 +268,27 @@ export default class GrowthBookUser {
   getAssignedVariations() {
     return new Map(this.assignedVariations);
   }
-  getExperiments() {}
 
-  private updateAttributeMap() {
-    this.attributeMap.clear();
-    this.flattenUserValues('', this.attributes).forEach(({ k, v }) => {
-      this.attributeMap.set(k, v);
-    });
-  }
+  private trackView<T>(experiment: Experiment<T, U>, variation: number) {
+    const userHashKey = this.getUserHashKey(experiment);
+    const userHashValue = this.ids[userHashKey];
 
-  private trackView<T>(
-    experiment: Experiment<T>,
-    variation: number,
-    userId: string,
-    anon?: boolean
-  ) {
     // Only track an experiment once per user/test
     if (
       variation !== -1 &&
-      !this.experimentsTracked.has(userId + experiment.key)
+      !this.experimentsTracked.has(userHashKey + userHashValue + experiment.key)
     ) {
-      this.experimentsTracked.add(userId + experiment.key);
+      this.experimentsTracked.add(userHashKey + userHashValue + experiment.key);
 
       if (this.client.config.onExperimentViewed) {
         this.client.config.onExperimentViewed({
-          experiment,
+          experiment: experiment as Experiment<any, any>,
           experimentId: experiment.key,
           index: variation,
+          user: this,
+          userHashKey: userHashKey as string,
           variationId: variation,
           value: experiment.variations[variation],
-          [anon ? 'anonId' : 'userId']: userId,
-          userAttributes: this.attributes,
         });
       }
     }

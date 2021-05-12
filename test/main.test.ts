@@ -1,11 +1,10 @@
 import {
   clearAppliedDomChanges,
   getWeightsFromOptions,
-  checkRule,
   getQueryStringOverride,
 } from '../src/util';
 import GrowthBookClient from '../src';
-import { Experiment, UserAttributes } from '../src/types';
+import { Experiment } from '../src/types';
 
 const client = new GrowthBookClient();
 
@@ -21,13 +20,11 @@ debug(() => 1);
 const chooseVariation = <T = number>(
   userId: string | null,
   experiment: string | Experiment<T>,
-  attributes?: UserAttributes,
   anonId?: string
 ) => {
   const user = client.user({
     id: userId || '',
     anonId: anonId || '',
-    attributes: attributes || {},
   });
 
   if (typeof experiment === 'string') {
@@ -171,13 +168,13 @@ describe('experiments', () => {
     const anonExp = { key: 'my-test', variations: [0, 1], anon: true };
     const userExp = { key: 'my-test', variations: [0, 1], anon: false };
 
-    expect(chooseVariation('1', userExp, {}, '1')).toEqual(1);
-    expect(chooseVariation('1', userExp, {}, '2')).toEqual(1);
-    expect(chooseVariation('1', anonExp, {}, '1')).toEqual(1);
-    expect(chooseVariation('1', anonExp, {}, '2')).toEqual(0);
+    expect(chooseVariation('1', userExp, '1')).toEqual(1);
+    expect(chooseVariation('1', userExp, '2')).toEqual(1);
+    expect(chooseVariation('1', anonExp, '1')).toEqual(1);
+    expect(chooseVariation('1', anonExp, '2')).toEqual(0);
     expect(chooseVariation('1', anonExp)).toEqual(-1);
-    expect(chooseVariation(null, anonExp, {}, '1')).toEqual(1);
-    expect(chooseVariation(null, userExp, {}, '1')).toEqual(-1);
+    expect(chooseVariation(null, anonExp, '1')).toEqual(1);
+    expect(chooseVariation(null, userExp, '1')).toEqual(-1);
   });
   it('tracking', () => {
     const mock = mockCallback();
@@ -201,8 +198,8 @@ describe('experiments', () => {
       value: 1,
       index: 1,
       variationId: 1,
-      userId: '1',
-      userAttributes: {},
+      user: user1,
+      userHashKey: 'id',
     });
     expect(mock.calls[1][0]).toEqual({
       experimentId: exp2.key,
@@ -210,8 +207,8 @@ describe('experiments', () => {
       value: 0,
       index: 0,
       variationId: 0,
-      userId: '1',
-      userAttributes: {},
+      user: user1,
+      userHashKey: 'id',
     });
     expect(mock.calls[2][0]).toEqual({
       experimentId: exp2.key,
@@ -219,8 +216,8 @@ describe('experiments', () => {
       value: 1,
       index: 1,
       variationId: 1,
-      userId: '2',
-      userAttributes: {},
+      user: user2,
+      userHashKey: 'id',
     });
   });
 
@@ -241,8 +238,8 @@ describe('experiments', () => {
       value: 'second',
       index: 1,
       variationId: 1,
-      userId: '1',
-      userAttributes: {},
+      user,
+      userHashKey: 'id',
     });
   });
 
@@ -385,16 +382,6 @@ describe('experiments', () => {
     expect(mock.calls.length).toEqual(0);
   });
 
-  it('handles weird targeting rules', () => {
-    expect(checkRule('9', '<', '20')).toEqual(true);
-    expect(checkRule('5', '<', '4')).toEqual(false);
-
-    const spy = jest.spyOn(console, 'error').mockImplementation();
-    expect(checkRule('a', '?', 'b')).toEqual(true);
-    expect(spy.mock.calls.length).toEqual(1);
-    spy.mockRestore();
-  });
-
   it('uses overrides', () => {
     client.overrides.set('my-test', {
       coverage: 0.01,
@@ -408,138 +395,67 @@ describe('experiments', () => {
     ).toEqual(-1);
   });
 
-  it('merges user attributes', () => {
-    const user = client.user({
-      id: '1',
-      attributes: {
-        foo: 1,
-        bar: 2,
-      },
-    });
-    expect(user.getAttributes()).toEqual({
-      foo: 1,
-      bar: 2,
-    });
-
-    user.setAttributes(
+  it('filters user groups', () => {
+    const user = client.user(
       {
-        bar: 3,
-        baz: 4,
+        id: '123',
       },
-      true
+      ['alpha', 'beta']
     );
-    expect(user.getAttributes()).toEqual({
-      foo: 1,
-      bar: 3,
-      baz: 4,
-    });
+
+    expect(
+      user.experiment({
+        key: 'my-test',
+        variations: [0, 1],
+        groups: ['internal', 'qa'],
+      }).inExperiment
+    ).toEqual(false);
+
+    expect(
+      user.experiment({
+        key: 'my-test',
+        variations: [0, 1],
+        groups: ['internal', 'qa', 'beta'],
+      }).inExperiment
+    ).toEqual(true);
+
+    expect(
+      user.experiment({
+        key: 'my-test',
+        variations: [0, 1],
+      }).inExperiment
+    ).toEqual(true);
   });
 
-  it('targeting', () => {
-    const exp = {
-      key: 'my-test',
-      variations: [0, 1],
-      targeting: [
-        'member = true',
-        'age > 18',
-        'source ~ (google|yahoo)',
-        'name != matt',
-        'email !~ ^.*@exclude.com$',
-      ],
-    };
+  it('runs custom include callback', () => {
+    expect(
+      chooseVariation('1', {
+        key: 'my-test',
+        variations: [0, 1],
+        include: () => false,
+      })
+    ).toEqual(-1);
+  });
 
-    // Matches all
-    const user = client.user({
-      id: '1',
-      attributes: {
-        member: true,
-        age: 21,
-        source: 'yahoo',
-        name: 'george',
-        email: 'test@example.com',
-      },
-    });
-    expect(user.experiment(exp).value).toEqual(1);
-
-    // Missing negative checks
-    user.setAttributes(
-      {
-        member: true,
-        age: 21,
-        source: 'yahoo',
-      },
-      false
-    );
-    expect(user.experiment(exp).value).toEqual(1);
-
-    // Missing all attributes
-    user.setAttributes({}, false);
-    expect(user.experiment(exp).inExperiment).toEqual(false);
-
-    // Fails boolean
-    user.setAttributes(
-      {
-        member: false,
-        age: 21,
-        source: 'yahoo',
-        name: 'george',
-        email: 'test@example.com',
-      },
-      false
-    );
-    expect(user.experiment(exp).inExperiment).toEqual(false);
-
-    // Fails number
-    user.setAttributes(
-      {
-        member: true,
-        age: 17,
-        source: 'yahoo',
-        name: 'george',
-        email: 'test@example.com',
-      },
-      false
-    );
-    expect(user.experiment(exp).inExperiment).toEqual(false);
-
-    // Fails regex
-    user.setAttributes(
-      {
-        member: true,
-        age: 21,
-        source: 'goog',
-        name: 'george',
-        email: 'test@example.com',
-      },
-      false
-    );
-    expect(user.experiment(exp).inExperiment).toEqual(false);
-
-    // Fails not equals
-    user.setAttributes(
-      {
-        member: true,
-        age: 21,
-        source: 'yahoo',
-        name: 'matt',
-        email: 'test@example.com',
-      },
-      false
-    );
-    expect(user.experiment(exp).inExperiment).toEqual(false);
-
-    // Fails not regex
-    user.setAttributes(
-      {
-        member: true,
-        age: 21,
-        source: 'yahoo',
-        name: 'george',
-        email: 'test@exclude.com',
-      },
-      false
-    );
-    expect(user.experiment(exp).inExperiment).toEqual(false);
+  it('supports custom user hash keys', () => {
+    for (let i = 0; i < 10; i++) {
+      const user = client.user({
+        id: i + '',
+        companyId: '1',
+      });
+      const { inExperiment, variationId } = user.experiment({
+        key: 'my-test',
+        variations: [0, 1],
+        userHashKey: 'companyId',
+      });
+      expect({
+        inExperiment,
+        variationId,
+      }).toEqual({
+        inExperiment: true,
+        variationId: 1,
+      });
+    }
   });
 
   it('experiments disabled', () => {
@@ -689,13 +605,6 @@ describe('experiments', () => {
       color: 'blue',
       size: 'small',
     });
-  });
-
-  it('responds to window.growthbook calls', () => {
-    window.growthbook.push('disable');
-    expect(client.isEnabled()).toEqual(false);
-    window.growthbook.push('enable');
-    expect(client.isEnabled()).toEqual(true);
   });
 
   it('does even weighting', () => {
