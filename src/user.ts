@@ -67,9 +67,10 @@ export default class GrowthBookUser<U extends Record<string, string>> {
   private isValidExperiment<T>(experiment: Experiment<T, U>): boolean {
     const numVariations = experiment.variations.length;
     if (numVariations < 2) {
-      this.log(
-        'variations must be at least 2, but only set to ' + numVariations
-      );
+      if (process.env.NODE_ENV !== 'production')
+        this.log(
+          'variations must be at least 2, but only set to ' + numVariations
+        );
       return false;
     }
 
@@ -78,12 +79,14 @@ export default class GrowthBookUser<U extends Record<string, string>> {
 
     if (!isForced) {
       if (experiment.status === 'draft') {
-        this.log('experiment in draft mode');
+        if (process.env.NODE_ENV !== 'production')
+          this.log('experiment in draft mode');
         return false;
       }
 
       if (experiment.status === 'stopped') {
-        this.log('experiment is stopped');
+        if (process.env.NODE_ENV !== 'production')
+          this.log('experiment is stopped');
         return false;
       }
     }
@@ -99,13 +102,15 @@ export default class GrowthBookUser<U extends Record<string, string>> {
     // Missing userHashKey
     const userHashKey = this.getUserHashKey(experiment);
     if (!(this.ids as any)[userHashKey || 'id']) {
-      this.log('user missing required id: ' + userHashKey);
+      if (process.env.NODE_ENV !== 'production')
+        this.log('user missing required id: ' + userHashKey);
       return false;
     }
 
     // Custom include callback
     if (experiment.include && !experiment.include()) {
-      this.log('the `include` callback returned false');
+      if (process.env.NODE_ENV !== 'production')
+        this.log('the `include` callback returned false');
       return false;
     }
 
@@ -114,22 +119,24 @@ export default class GrowthBookUser<U extends Record<string, string>> {
       experiment.groups &&
       !experiment.groups.filter(g => this.userInGroup(g)).length
     ) {
-      this.log(
-        'experiment limited to groups ' +
-          JSON.stringify(experiment.groups) +
-          ', user in groups ' +
-          JSON.stringify(this.groups)
-      );
+      if (process.env.NODE_ENV !== 'production')
+        this.log(
+          'experiment limited to groups ' +
+            JSON.stringify(experiment.groups) +
+            ', user in groups ' +
+            JSON.stringify(this.groups)
+        );
       return false;
     }
 
     // URL targeting
     if (experiment.url && !urlIsValid(experiment.url, this.client)) {
-      this.log(
-        'current url (' +
-          this.client.config.url +
-          ') does not match experiment url targeting'
-      );
+      if (process.env.NODE_ENV !== 'production')
+        this.log(
+          'current url (' +
+            this.client.config.url +
+            ') does not match experiment url targeting'
+        );
       return false;
     }
 
@@ -166,7 +173,8 @@ export default class GrowthBookUser<U extends Record<string, string>> {
     experiment: Experiment<T, U>,
     isOverride: boolean = false
   ): ExperimentResults<T, U> {
-    this.log('Trying to put user in experiment ' + experiment.key);
+    if (process.env.NODE_ENV !== 'production')
+      this.log('Trying to put user in experiment ' + experiment.key);
 
     if (isOverride) {
       this.log('Using override experiment configs in client');
@@ -174,7 +182,8 @@ export default class GrowthBookUser<U extends Record<string, string>> {
 
     // Experiments turned off globally
     if (!this.client.isEnabled()) {
-      this.log('client is not enabled, assigning variation -1');
+      if (process.env.NODE_ENV !== 'production')
+        this.log('client is not enabled, assigning variation -1');
       return this.getExperimentResults(experiment);
     }
 
@@ -182,15 +191,17 @@ export default class GrowthBookUser<U extends Record<string, string>> {
     if (this.client.config.enableQueryStringOverride) {
       let override = getQueryStringOverride(experiment.key, this.client);
       if (override !== null) {
-        this.log(
-          'querystring override is present, assigning variation ' + override
-        );
+        if (process.env.NODE_ENV !== 'production')
+          this.log(
+            'querystring override is present, assigning variation ' + override
+          );
         return this.getExperimentResults(experiment, override);
       }
     }
 
     if (!this.isValidExperiment(experiment)) {
-      this.log('not a valid experiment, assigning variation -1');
+      if (process.env.NODE_ENV !== 'production')
+        this.log('not a valid experiment, assigning variation -1');
       return this.getExperimentResults(experiment);
     }
 
@@ -204,18 +215,21 @@ export default class GrowthBookUser<U extends Record<string, string>> {
 
     // If it fails targeting rules
     if (!this.isIncluded(experiment)) {
-      this.log('not included in experiment, assigning variation -1');
+      if (process.env.NODE_ENV !== 'production')
+        this.log('not included in experiment, assigning variation -1');
       return this.getExperimentResults(experiment);
     }
 
     // Forced in the experiment definition itself
     if (experiment.force !== undefined && experiment.force !== null) {
-      this.log('variation forced to ' + experiment.force);
+      if (process.env.NODE_ENV !== 'production')
+        this.log('variation forced to ' + experiment.force);
       return this.getExperimentResults(experiment, experiment.force);
     }
 
     if (this.client.config.qa) {
-      this.log('client is in qa mode, assigning variation -1');
+      if (process.env.NODE_ENV !== 'production')
+        this.log('client is in qa mode, assigning variation -1');
       return this.getExperimentResults(experiment);
     }
 
@@ -228,12 +242,13 @@ export default class GrowthBookUser<U extends Record<string, string>> {
     const variation = chooseVariation(userHashValue, experiment.key, weights);
     this.trackView(experiment, variation);
 
-    this.log(
-      'user put in experiment using hash key `' +
-        userHashKey +
-        '`, assigned variation ' +
-        variation
-    );
+    if (process.env.NODE_ENV !== 'production')
+      this.log(
+        'user put in experiment using hash key `' +
+          userHashKey +
+          '`, assigned variation ' +
+          variation
+      );
 
     return this.getExperimentResults(experiment, variation);
   }

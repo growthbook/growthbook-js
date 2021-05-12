@@ -7,7 +7,7 @@ Powerful A/B testing for JavaScript.
 ![Build Status](https://github.com/growthbook/growthbook-js/workflows/Build/badge.svg)
 
 -  **No external dependencies**
--  **Lightweight and fast** (1.9Kb gzipped)
+-  **Lightweight and fast** (1.6Kb gzipped)
 -  **No HTTP requests** everything is defined and evaluated locally
 -  Supports both **browsers and nodejs**
 -  **No flickering or blocking calls**
@@ -67,7 +67,7 @@ The GrowthBookClient constructor takes an optional `options` argument.
 Below are all of the available options:
 
 -  **enabled** - Default true. Set to false to completely disable all experiments.
--  **debug** - Default false. If set to true, console.log info about why experiments are run and why specific variations are chosen.
+-  **debug** - Default false. If set to true, console.log info about why experiments are run and why specific variations are chosen. Only works when NODE_ENV is not set to production.
 -  **onExperimentViewed** - Callback when the user views an experiment.
 -  **url** - The URL for the current request (defaults to `window.location.href` when in a browser)
 -  **enableQueryStringOverride** - Default true.  If true, enables forcing variations via the URL.  Very useful for QA.  https://example.com/?my-experiment=1
