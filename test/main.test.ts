@@ -400,7 +400,12 @@ describe('experiments', () => {
       {
         id: '123',
       },
-      ['alpha', 'beta']
+      {
+        alpha: true,
+        beta: true,
+        internal: false,
+        qa: false,
+      }
     );
 
     expect(

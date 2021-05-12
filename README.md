@@ -148,7 +148,10 @@ user.experiment({
 Slow rollout (10% of users who opted into "beta" features):
 ```ts
 // User is in the "qa" and "beta" groups
-const user = client.user({id: "123"}, ["qa", "beta"]);
+const user = client.user({id: "123"}, {
+  qa: isQATester(),
+  beta: betaFeaturesEnabled()
+});
 user.experiment({
   key: "slow-rollout",
   variations: ["A", "B"],

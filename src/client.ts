@@ -45,9 +45,9 @@ export default class GrowthBookClient {
 
   user<U extends Record<string, string>>(
     ids: U,
-    groups?: string[]
+    groups?: Record<string, boolean>
   ): GrowthBookUser<U> {
-    const user = new GrowthBookUser(ids, groups || [], this);
+    const user = new GrowthBookUser(ids, groups || {}, this);
     this.users.push(user);
     this.subscriptions.forEach(s => s());
     return user;

@@ -9,7 +9,7 @@ import GrowthBookClient from 'client';
 
 export default class GrowthBookUser<U extends Record<string, string>> {
   private ids: U;
-  private groups: string[];
+  private groups: Record<string, boolean>;
   client: GrowthBookClient;
   private experimentsTracked: Set<string>;
   private assignedVariations: Map<
@@ -21,9 +21,13 @@ export default class GrowthBookUser<U extends Record<string, string>> {
   > = new Map();
   private subscriptions: Set<() => void> = new Set();
 
-  constructor(ids: U, groups: string[], client: GrowthBookClient) {
+  constructor(
+    ids: U,
+    groups: Record<string, boolean>,
+    client: GrowthBookClient
+  ) {
     this.ids = { ...ids };
-    this.groups = groups.concat([]);
+    this.groups = { ...groups };
     this.client = client;
 
     this.experimentsTracked = new Set();
@@ -88,7 +92,7 @@ export default class GrowthBookUser<U extends Record<string, string>> {
   }
 
   private userInGroup(group: string): boolean {
-    return this.groups.includes(group);
+    return group in this.groups && this.groups[group];
   }
 
   private isIncluded<T>(experiment: Experiment<T, U>): boolean {
