@@ -13,43 +13,6 @@ export function hashFnv32a(str: string): number {
   return hval >>> 0;
 }
 
-const isNum = /^[-]?[0-9]*(\.[0-9]*)?$/;
-export function checkRule(
-  actual: string,
-  op: string,
-  desired: string
-): boolean {
-  // Numeric data
-  let actualNumeric, desiredNumeric;
-  if (actual.match(isNum) && desired.match(isNum)) {
-    actualNumeric = parseFloat(actual);
-    desiredNumeric = parseFloat(desired);
-  }
-
-  switch (op) {
-    case '=':
-      return actual === desired;
-    case '!=':
-      return actual !== desired;
-    case '>':
-      return actualNumeric !== undefined && desiredNumeric !== undefined
-        ? actualNumeric > desiredNumeric
-        : actual > desired;
-    case '<':
-      return actualNumeric !== undefined && desiredNumeric !== undefined
-        ? actualNumeric < desiredNumeric
-        : actual < desired;
-    case '~':
-      return !!actual.match(new RegExp(desired));
-    case '!~':
-      return !actual.match(new RegExp(desired));
-  }
-  if (process.env.NODE_ENV !== 'production') {
-    console.error('Unknown targeting rule operator: ', op);
-  }
-  return true;
-}
-
 export function chooseVariation(
   userId: string,
   testId: string,
@@ -123,7 +86,9 @@ function getEqualWeights(n: number): number[] {
   return new Array(n).fill(1 / n);
 }
 
-export function getWeightsFromOptions<T>(experiment: Experiment<T>) {
+export function getWeightsFromOptions<T, U = any>(
+  experiment: Experiment<T, U>
+) {
   // Full coverage by default
   let coverage =
     typeof experiment.coverage === 'undefined' ? 1 : experiment.coverage;
