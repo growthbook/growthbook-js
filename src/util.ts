@@ -1,4 +1,3 @@
-import GrowthBookClient from './client';
 import { Experiment } from 'types';
 
 export function hashFnv32a(str: string): number {
@@ -13,14 +12,7 @@ export function hashFnv32a(str: string): number {
   return hval >>> 0;
 }
 
-export function chooseVariation(
-  userId: string,
-  testId: string,
-  weights: number[] = [0.5, 0.5]
-): number {
-  // Hash the user id and testName to a number from 0 to 1;
-  const n = (hashFnv32a(userId + testId) % 1000) / 1000;
-
+export function chooseVariation(n: number, weights: number[]): number {
   let cumulativeWeight = 0;
   for (let i = 0; i < weights.length; i++) {
     cumulativeWeight += weights[i];
@@ -28,73 +20,36 @@ export function chooseVariation(
       return i;
     }
   }
-
   return -1;
 }
 
-export function urlIsValid(
-  urlRegex: string,
-  client: GrowthBookClient
-): boolean {
-  const escaped = urlRegex.replace(/([^\\])\//g, '$1\\/');
-
-  const url = client.config.url;
-  if (!url) return false;
-
-  const pathOnly = url.replace(/^https?:\/\//, '').replace(/^[^/]*\//, '/');
-
+export function getUrlRegExp(regexString: string): RegExp | null {
   try {
-    const regex = new RegExp(escaped);
-    if (regex.test(url)) return true;
-    if (regex.test(pathOnly)) return true;
-    return false;
+    const escaped = regexString.replace(/([^\\])\//g, '$1\\/');
+    return new RegExp(escaped);
   } catch (e) {
-    return false;
-  }
-}
-
-export function getQueryStringOverride(id: string, client: GrowthBookClient) {
-  const url = client.config.url;
-
-  if (!url) {
+    console.error(e);
     return null;
   }
-
-  const search = url.split('?')[1];
-  if (!search) {
-    return null;
-  }
-
-  const match = search
-    .replace(/#.*/, '') // Get rid of anchor
-    .split('&') // Split into key/value pairs
-    .map(kv => kv.split('=', 2))
-    .filter(([k]) => k === id) // Look for key that matches the experiment id
-    .map(([, v]) => parseInt(v)); // Parse the value into an integer
-
-  if (match.length > 0 && match[0] >= -1 && match[0] < 10) return match[0];
-
-  return null;
 }
 
-const appliedDomChanges = new Set();
-export function clearAppliedDomChanges() {
-  appliedDomChanges.clear();
-}
-
-function getEqualWeights(n: number): number[] {
+export function getEqualWeights(n: number): number[] {
   return new Array(n).fill(1 / n);
 }
 
-export function getWeightsFromOptions<T, U = any>(
-  experiment: Experiment<T, U>
-) {
+export function getWeightsFromOptions<T>(experiment: Experiment<T>) {
   // Full coverage by default
   let coverage =
     typeof experiment.coverage === 'undefined' ? 1 : experiment.coverage;
-  if (coverage < 0 || coverage > 1) {
+
+  if (coverage < 0) {
     if (process.env.NODE_ENV !== 'production') {
-      console.error('Experiment.coverage must be between 0 and 1 inclusive');
+      console.error('Experiment.coverage must be greater than or equal to 0');
+    }
+    coverage = 0;
+  } else if (coverage > 1) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Experiment.coverage must be less than or equal to 1');
     }
     coverage = 1;
   }
@@ -123,4 +78,35 @@ export function getWeightsFromOptions<T, U = any>(
 
   // Scale weights by traffic coverage
   return weights.map(n => n * coverage);
+}
+
+export function getQueryStringOverride(id: string, url: string) {
+  if (!url) {
+    return null;
+  }
+
+  const search = url.split('?')[1];
+  if (!search) {
+    return null;
+  }
+
+  const match = search
+    .replace(/#.*/, '') // Get rid of anchor
+    .split('&') // Split into key/value pairs
+    .map(kv => kv.split('=', 2))
+    .filter(([k]) => k === id) // Look for key that matches the experiment id
+    .map(([, v]) => parseInt(v)); // Parse the value into an integer
+
+  if (match.length > 0 && match[0] >= -1 && match[0] < 10) return match[0];
+
+  return null;
+}
+
+export function isIncluded(include: () => boolean) {
+  try {
+    return include();
+  } catch (e) {
+    console.error(e);
+    return false;
+  }
 }

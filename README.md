@@ -7,7 +7,7 @@ Powerful A/B testing for JavaScript.
 ![Build Status](https://github.com/growthbook/growthbook-js/workflows/Build/badge.svg)
 
 -  **No external dependencies**
--  **Lightweight and fast** (1.6Kb gzipped)
+-  **Lightweight and fast** (1Kb gzipped)
 -  **No HTTP requests** everything is defined and evaluated locally
 -  Supports both **browsers and nodejs**
 -  **No flickering or blocking calls**
@@ -30,7 +30,7 @@ or use directly in your HTML without installing first:
 
 ```html
 <script type="module">
-import GrowthBookClient from 'https://unpkg.com/@growthbook/growthbook/dist/growthbook.esm.js';
+import GrowthBook from 'https://unpkg.com/@growthbook/growthbook/dist/growthbook.esm.js';
 //...
 </script>
 ```
@@ -38,86 +38,71 @@ import GrowthBookClient from 'https://unpkg.com/@growthbook/growthbook/dist/grow
 ## Quick Usage
 
 ```ts
-import GrowthBookClient from '@growthbook/growthbook';
+import GrowthBook from '@growthbook/growthbook';
 
-// Create a client and setup tracking
-const client = new GrowthBookClient({
-  onExperimentViewed: ({experimentId, variationId}) => {
-    // Use whatever event tracking system you have in place
-    analytics.track("Experiment Viewed", {experimentId, variationId});
+// Define the experimental context
+const growthbook = new GrowthBook({
+  // The user attributes used to assign variations
+  user: { id: "123" },
+  // Use whatever event tracking system you have in place
+  trackingCallback: (experiment, result) => {
+    analytics.track("Experiment Viewed", {
+      experimentId: experiment.key,
+      variationId: result.variationId
+    })
   }
-});
+})
 
-// Define the user that you want to run an experiment on
-const user = client.user({id: "12345"});
+// Run an experiment
+const {value} = growthbook.run({
+  key: "my-experiment",
+  variations: ["A", "B"]
+})
 
-// Put the user in an experiment
-const {value} = user.experiment({
-    key: "my-experiment",
-    variations: ["A", "B"]
-});
-
-console.log(value); // "A" or "B"
+console.log(value) // "A" or "B"
 ```
 
-## Client Configuration
+## GrowthBook class
 
-The GrowthBookClient constructor takes an optional `options` argument.
+The GrowthBook constructor takes a `Context` object. Below are all of the possible Context properties:
 
-Below are all of the available options:
-
--  **enabled** - Default true. Set to false to completely disable all experiments.
--  **debug** - Default false. If set to true, console.log info about why experiments are run and why specific variations are chosen. Only works when NODE_ENV is not set to production.
--  **onExperimentViewed** - Callback when the user views an experiment.
--  **url** - The URL for the current request (defaults to `window.location.href` when in a browser)
--  **enableQueryStringOverride** - Default true.  If true, enables forcing variations via the URL.  Very useful for QA.  https://example.com/?my-experiment=1
-
-### SPA support
-
-With a Single Page App (SPA), you need to update the client on navigation in order to target tests based on URL:
-
-```ts
-client.config.url = newUrl;
-```
-
-Doing this with Next.js for example, will look like this:
-```tsx
-export default function MyApp({ Component, pageProps }) {
-  const router = useRouter()
-
-  useEffect(() => {
-    const onChange = (newUrl) => client.config.url = newUrl;
-    router.events.on('routeChangeComplete', onChange);
-    return () => router.events.off('routeChangeComplete', onChange);
-  }, [])
-
-  return <Component {...pageProps} />
-}
-```
+-  **enabled** (`boolean`) - Switch to globally disable all experiments. Default true.
+-  **user** (`{}`) - Map of user attributes that are used to assign variations
+-  **userGroups** (`{}`) - A map of which groups the user belongs to (key is the group name, value is boolean)
+-  **url** (`string`) - The URL of the current page (defaults to `window.location.href` when in a browser environment)
+-  **overrides** (`{}`) - Override properties of specific experiments (used for Remote Config)
+-  **forcedVariations** (`{}`) - Force specific experiments to always assign a specific variation (used for QA)
+-  **qaMode** (`boolean`) - If true, random assignment is disabled and only explicitly forced variations are used.
+-  **trackingCallback** (`function`) - A function that takes `experiment` and `result` as arguments.
 
 ## Experiments
 
-As shown above, the simplest experiment you can define has 2 fields: `key` and `variations`.
-
-There are a lot more configuration options you can specify.  Here is the full list of options:
+Below are all of the possible properties you can set for an Experiment:
 
 -  **key** (`string`) - The globally unique tracking key for the experiment
 -  **variations** (`any[]`) - The different variations to choose between
 -  **weights** (`number[]`) - How to weight traffic between variations. Must add to 1.
 -  **status** (`string`) - "running" is the default and always active. "draft" is only active during QA and development.  "stopped" is only active when forcing a winning variation to 100% of users.
 -  **coverage** (`number`) - What percent of users should be included in the experiment (between 0 and 1, inclusive)
--  **url** (`string`) - Users can only be included in this experiment if the current URL matches this regex
+-  **url** (`RegExp`) - Users can only be included in this experiment if the current URL matches this regex
 -  **include** (`() => boolean`) - A callback that returns true if the user should be part of the experiment and false if they should not be
 -  **groups** (`string[]`) - Limits the experiment to specific user groups
 -  **force** (`number`) - All users included in the experiment will be forced into the specific variation index
--  **randomizationUnit** - What user attribute you want to use to assign variations (defaults to `id`)
+-  **hashAttribute** (`string`) - What user attribute should be used to assign variations (defaults to "id")
 
-### Running Experiments
 
-Run experiments by calling `user.experiment()` which returns an object with a few useful properties:
+## Running Experiments
+
+Run experiments by calling `growthbook.run(experiment)` which returns an object with a few useful properties:
 
 ```ts
-const {inExperiment, variationId, value} = user.experiment({
+const {
+  inExperiment, 
+  variationId, 
+  value, 
+  hashAttribute, 
+  hashValue
+} = growthbook.run({
     key: "my-experiment",
     variations: ["A", "B"]
 });
@@ -130,15 +115,21 @@ console.log(variationId); // 0 or 1
 
 // The value of the assigned variation
 console.log(value); // "A" or "B"
+
+// The user attribute used to assign a variation
+console.log(hashAttribute); // "id"
+
+// The value of that attribute
+console.log(hashValue); // e.g. "123"
 ```
 
-The `inExperiment` flag can be false if the experiment defines any sort of targeting rules which the user does not pass.  In this case, the user is always assigned variation index `0`.
+The `inExperiment` flag is only set to true if the user was randomly assigned a variation.  If the user failed any targeting rules or was forced into a specific variation, this flag will be false.
 
 ### Example Experiments
 
 3-way experiment with uneven variation weights:
 ```ts
-user.experiment({
+growthbook.run({
   key: "3-way-uneven",
   variations: ["A","B","C"],
   weights: [0.5, 0.25, 0.25]
@@ -148,11 +139,15 @@ user.experiment({
 Slow rollout (10% of users who opted into "beta" features):
 ```ts
 // User is in the "qa" and "beta" groups
-const user = client.user({id: "123"}, {
-  qa: isQATester(),
-  beta: betaFeaturesEnabled()
-});
-user.experiment({
+const growthbook = new GrowthBook({
+  user: {id: "123"},
+  userGroups: {
+    qa: isQATester(),
+    beta: betaFeaturesEnabled()
+  }
+})
+
+growthbook.run({
   key: "slow-rollout",
   variations: ["A", "B"],
   coverage: 0.1,
@@ -162,29 +157,35 @@ user.experiment({
 
 Complex variations and custom targeting
 ```ts
-const {value} = user.experiment({
+const {value} = growthbook.run({
   key: "complex-variations",
   variations: [
     {color: "blue", size: "large"},
     {color: "green", size: "small"}
   ],
+  url: /^\/post\/[0-9]+$/i
   include: () => isPremium || creditsRemaining > 50
 });
+
 console.log(value.color, value.size); // blue,large OR green,small
 ```
 
 Assign variations based on something other than user id
 ```ts
-const user = client.user({
-  id: "123",
-  companyId: "abc"
-});
-user.experiment({
+const growthbook = new GrowthBook({
+  user: {
+    id: "123",
+    company: "growthbook"
+  }
+})
+
+growthbook.run({
   key: "by-company-id",
   variations: ["A", "B"],
-  randomizationUnit: "companyId"
+  hashAttribute: "company"
 })
-// Users in the same company will now always get the same variation
+
+// Users in the same company will always get the same variation
 ```
 
 ### Overriding Experiment Configuration
@@ -193,13 +194,17 @@ It's common practice to adjust experiment settings after a test is live.  For ex
 
 For example, to roll out a winning variation to 100% of users:
 ```ts
-client.overrides.set("experiment-key", {
-    status: 'stopped',
-    force: 1
-});
+const growthbook = new GrowthBook({
+  user: {id: "123"},
+  overrides: {
+    "experiment-key": {
+      status: "stopped",
+      force: 1
+    }
+  }
+})
 
-// Later in code
-const {value} = user.experiment({
+const {value} = growthbook.run({
   key: "experiment-key",
   variations: ["A", "B"]
 });
@@ -213,25 +218,31 @@ The full list of experiment properties you can override is:
 *  weights
 *  coverage
 *  groups
-*  url
-
-This data structure can be easily seralized and stored in a database or returned from an API.  There is a small helper function if you have all of your overrides in a single JSON object:
-
-```ts
-const JSONFromDatabase = {
-  "experiment-key-1": {
-    "weights": [0.1, 0.9]
-  },
-  "experiment-key-2": {
-    "groups": ["everyone"],
-    "coverage": 1
-  }
-};
-
-client.importOverrides(JSONFromDatabase)
-```
+*  url (can use string instead of regex if serializing in a database)
 
 If you use the Growth Book App (https://github.com/growthbook/growthbook) to manage experiments, there's a built-in API endpoint you can hit that returns overrides in this exact format.  It's a great way to make sure your experiments are always up-to-date.
+
+## Typescript
+
+This module exposes Typescript types if needed.
+
+This is especially useful if experiments are defined as a variable before being passed into `growthbook.run`. Unions and tuples are used heavily and Typescript has trouble inferring those properly.
+
+```ts
+import type {
+  Context, 
+  Experiment, 
+  Result, 
+  ExperimentOverride
+} from "@growthbook/growthbook"
+
+// The "number" part refers to the variation type
+const exp: Experiment<number> = {
+  key: "my-test",
+  variations: [0, 1],
+  status: "stoped" // Type error! (should be "stopped")
+}
+```
 
 ## Event Tracking and Analyzing Results
 
@@ -245,44 +256,37 @@ For A/B tests, you just need to track one additional event - when someone views 
 
 ```ts
 // Specify a tracking callback when instantiating the client
-const client = new GrowthBookClient({
-    onExperimentViewed: ({experimentId, variationId}) => {
-      // ...
-    }
-});
+const growthbook = new GrowthBook({
+  user: {id: "123"},
+  trackingCallback: (experiment, result) => {
+    // ...
+  }
+})
 ```
-
-The object passed to your callback has the following properties:
--  experimentId (the key of the experiment)
--  variationId (the array index of the assigned variation)
--  value (the value of the assigned variation)
--  experiment (the full experiment object)
--  user (the full user object)
--  randomizationUnit (which user attribute was used to assign a variation)
 
 Below are examples for a few popular event tracking tools:
 
 #### Google Analytics
 ```ts
-ga('send', 'event', 'experiment', experimentId, variationId, {
+ga('send', 'event', 'experiment', experiment.key, result.variationId, {
   // Custom dimension for easier analysis
-  'dimension1': `${experimentId}::${variationId}`
+  'dimension1': `${experiment.key}::${result.variationId}`
 });
 ```
 
 #### Segment
 ```ts
 analytics.track("Experiment Viewed", {
-  experimentId,
-  variationId
+  experimentId: experiment.key,
+  variationId: result.variationId
 });
 ```
 
 #### Mixpanel
 ```ts
 mixpanel.track("$experiment_started", {
-  'Experiment name': experimentId,
-  'Variant name': variationId
+  'Experiment name': experiment.key,
+  'Variant name': result.variationId
 });
 ```
 
@@ -310,6 +314,6 @@ Integration is super easy:
 
 1.  Create a Growth Book API key
 2.  Periodically fetch the latest experiment overrides from the API and cache in Redis, Mongo, etc.
-3.  At the start of your app, run `client.importOverrides(listFromCache)`
+3.  At the start of your app, pass in the overrides to the GrowthBook constructor
 
 Now you can start/stop tests, adjust coverage and variation weights, and apply a winning variation to 100% of traffic, all within the Growth Book App without deploying code changes to your site.
