@@ -1,72 +1,47 @@
-export interface ExperimentResults<
-  T = any,
-  U extends Record<string, any> = {}
-> {
+export interface Experiment<T> {
+  key: string;
+  variations: [T, T, ...T[]];
+  weights?: number[];
+  status?: 'draft' | 'running' | 'stopped';
+  coverage?: number;
+  url?: RegExp;
+  include?: () => boolean;
+  groups?: string[];
+  force?: number;
+  hashAttribute?: string;
+}
+
+export type ExperimentOverride = Pick<
+  Experiment<any>,
+  'weights' | 'status' | 'force' | 'coverage' | 'groups'
+> & {
+  url?: RegExp | string;
+};
+
+export interface Result<T> {
   value: T;
   variationId: number;
   inExperiment: boolean;
-  /** @deprecated */
-  index: number;
-  /** @deprecated */
-  experiment?: Experiment<T, U>;
+  hashAttribute: string;
+  hashValue: string;
 }
 
-export interface Experiment<T, U extends Record<string, any> = {}> {
-  key: string;
-  variations: T[];
-  weights?: number[];
-  randomizationUnit?: keyof U;
-  include?: () => boolean;
-  groups?: string[];
-  status?: 'draft' | 'running' | 'stopped';
-  force?: number;
-  coverage?: number;
+export interface Context {
+  enabled?: boolean;
+  user?: {
+    id?: string;
+    anonId?: string;
+    [key: string]: string | undefined;
+  };
+  groups?: Record<string, boolean>;
   url?: string;
-  /** @deprecated */
-  targeting?: string[];
-  /** @deprecated */
-  anon?: boolean;
+  overrides?: Record<string, ExperimentOverride>;
+  forcedVariations?: Record<string, number>;
+  qaMode?: boolean;
+  trackingCallback?: (experiment: Experiment<any>, result: Result<any>) => void;
 }
 
-export interface ExperimentOverride {
-  weights?: number[];
-  status?: 'draft' | 'running' | 'stopped';
-  force?: number;
-  coverage?: number;
-  groups?: string[];
-  url?: string;
-  /** @deprecated */
-  targeting?: string[];
-}
-
-export type TrackExperimentFunctionProps<
-  T = any,
-  U extends Record<string, any> = {}
-> = {
-  experimentId: string;
-  variationId: number;
-  experiment: Experiment<T, U>;
-  value: T;
-  randomizationUnit: string;
-  user: U;
-  /** @deprecated */
-  index: number;
-  /** @deprecated */
-  userId?: string;
-  /** @deprecated */
-  anonId?: string;
-  /** @deprecated */
-  userAttributes?: any;
-};
-
-export type TrackExperimentFunction = (
-  info: TrackExperimentFunctionProps
+export type SubscriptionFunction = (
+  experiment: Experiment<any>,
+  result: Result<any>
 ) => void;
-
-export interface ClientConfigInterface {
-  url?: string;
-  debug?: boolean;
-  qa?: boolean;
-  onExperimentViewed?: TrackExperimentFunction;
-  enableQueryStringOverride?: boolean;
-}
