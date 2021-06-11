@@ -1,13 +1,11 @@
-<p align="center"><img src="https://www.growthbook.io/logos/growthbook-logo@2x.png" width="400px" /></p>
-
-# Growth Book - Javascript
+# Growth Book JS
 
 Powerful A/B testing for JavaScript.
 
-![Build Status](https://github.com/growthbook/growthbook-js/workflows/Build/badge.svg)
+![Build Status](https://github.com/growthbook/growthbook-js/workflows/Build/badge.svg) ![GZIP Size](https://img.shields.io/badge/gzip%20size-1.26KB-informational) ![NPM Version](https://img.shields.io/npm/v/@growthbook/growthbook)
 
 -  **No external dependencies**
--  **Lightweight and fast** (1Kb gzipped)
+-  **Lightweight and fast**
 -  **No HTTP requests** everything is defined and evaluated locally
 -  Supports both **browsers and nodejs**
 -  **No flickering or blocking calls**
@@ -16,7 +14,7 @@ Powerful A/B testing for JavaScript.
 -  **Use your existing event tracking** (GA, Segment, Mixpanel, custom)
 -  **Adjust variation weights and targeting** without deploying new code
 
-**Note**: This library is just for running A/B tests. To analyze results, use the Growth Book App (https://github.com/growthbook/growthbook).
+**Note**: This library is just for running A/B tests in Javascript. To analyze results, use the Growth Book App (https://github.com/growthbook/growthbook).
 
 ## Installation
 
@@ -42,9 +40,9 @@ import GrowthBook from '@growthbook/growthbook';
 
 // Define the experimental context
 const growthbook = new GrowthBook({
-  // The user attributes used to assign variations
+  // The attributes used to assign variations
   user: { id: "123" },
-  // Use whatever event tracking system you have in place
+  // Called when a user is put into an experiment
   trackingCallback: (experiment, result) => {
     analytics.track("Experiment Viewed", {
       experimentId: experiment.key,
@@ -68,7 +66,7 @@ The GrowthBook constructor takes a `Context` object. Below are all of the possib
 
 -  **enabled** (`boolean`) - Switch to globally disable all experiments. Default true.
 -  **user** (`{}`) - Map of user attributes that are used to assign variations
--  **userGroups** (`{}`) - A map of which groups the user belongs to (key is the group name, value is boolean)
+-  **groups** (`{}`) - A map of which groups the user belongs to (key is the group name, value is boolean)
 -  **url** (`string`) - The URL of the current page (defaults to `window.location.href` when in a browser environment)
 -  **overrides** (`{}`) - Override properties of specific experiments (used for Remote Config)
 -  **forcedVariations** (`{}`) - Force specific experiments to always assign a specific variation (used for QA)
@@ -141,7 +139,7 @@ Slow rollout (10% of users who opted into "beta" features):
 // User is in the "qa" and "beta" groups
 const growthbook = new GrowthBook({
   user: {id: "123"},
-  userGroups: {
+  groups: {
     qa: isQATester(),
     beta: betaFeaturesEnabled()
   }

@@ -347,7 +347,7 @@ describe('experiments', () => {
   it('filters user groups', () => {
     const growthbook = new GrowthBook({
       user: { id: '123' },
-      userGroups: {
+      groups: {
         alpha: true,
         beta: true,
         internal: false,
@@ -804,7 +804,7 @@ describe('experiments', () => {
     const assigned = growthbook.getAllResults();
     const assignedArr: { e: string; v: number }[] = [];
     assigned.forEach((v, e) => {
-      assignedArr.push({ e, v: v.variationId });
+      assignedArr.push({ e, v: v.result.variationId });
     });
 
     expect(assignedArr.length).toEqual(2);

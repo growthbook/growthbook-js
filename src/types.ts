@@ -33,7 +33,7 @@ export interface Context {
     anonId?: string;
     [key: string]: string | undefined;
   };
-  userGroups?: Record<string, boolean>;
+  groups?: Record<string, boolean>;
   url?: string;
   overrides?: Record<string, ExperimentOverride>;
   forcedVariations?: Record<string, number>;

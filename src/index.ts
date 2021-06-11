@@ -16,7 +16,13 @@ export default class GrowthBook {
   private _trackedExperiments = new Set();
   public debug = false;
   private subscriptions = new Set<SubscriptionFunction>();
-  private assigned = new Map<string, Result<any>>();
+  private assigned = new Map<
+    string,
+    {
+      experiment: Experiment<any>;
+      result: Result<any>;
+    }
+  >();
 
   constructor(context: Context) {
     this.context = context;
@@ -30,7 +36,7 @@ export default class GrowthBook {
     };
   }
 
-  public getAllResults(): Map<string, Result<any>> {
+  public getAllResults() {
     return new Map(this.assigned);
   }
 
@@ -46,12 +52,13 @@ export default class GrowthBook {
 
     // If assigned variation has changed, fire subscriptions
     const prev = this.assigned.get(experiment.key);
+    // TODO: what if the experiment definition has changed?
     if (
       !prev ||
-      prev.inExperiment !== result.inExperiment ||
-      prev.variationId !== result.variationId
+      prev.result.inExperiment !== result.inExperiment ||
+      prev.result.variationId !== result.variationId
     ) {
-      this.assigned.set(experiment.key, result);
+      this.assigned.set(experiment.key, { experiment, result });
       this.subscriptions.forEach(cb => {
         try {
           cb(experiment, result);
@@ -283,9 +290,9 @@ export default class GrowthBook {
   }
 
   private hasGroupOverlap(expGroups: string[]): boolean {
-    const userGroups = this.context.userGroups || {};
+    const groups = this.context.groups || {};
     for (let i = 0; i < expGroups.length; i++) {
-      if (userGroups[expGroups[i]]) return true;
+      if (groups[expGroups[i]]) return true;
     }
     return false;
   }
