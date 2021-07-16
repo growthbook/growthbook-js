@@ -1,5 +1,3 @@
-import { Experiment } from 'types';
-
 export function hashFnv32a(str: string): number {
   let hval = 0x811c9dc5;
   const l = str.length;
@@ -12,11 +10,13 @@ export function hashFnv32a(str: string): number {
   return hval >>> 0;
 }
 
-export function chooseVariation(n: number, weights: number[]): number {
-  let cumulativeWeight = 0;
-  for (let i = 0; i < weights.length; i++) {
-    cumulativeWeight += weights[i];
-    if (n < cumulativeWeight) {
+export function chooseVariation(n: number, ranges: [number, number][]): number {
+  for (let i = 0; i < ranges.length; i++) {
+    if (
+      ranges[i][0] !== ranges[i][1] &&
+      n >= ranges[i][0] &&
+      n < ranges[i][1]
+    ) {
       return i;
     }
   }
@@ -37,11 +37,12 @@ export function getEqualWeights(n: number): number[] {
   return new Array(n).fill(1 / n);
 }
 
-export function getWeightsFromOptions<T>(experiment: Experiment<T>) {
-  // Full coverage by default
-  let coverage =
-    typeof experiment.coverage === 'undefined' ? 1 : experiment.coverage;
-
+export function getBucketRanges(
+  numVariations: number,
+  coverage: number = 1,
+  weights?: number[]
+) {
+  // Make sure coverage is within bounds
   if (coverage < 0) {
     if (process.env.NODE_ENV !== 'production') {
       console.error('Experiment.coverage must be greater than or equal to 0');
@@ -54,11 +55,10 @@ export function getWeightsFromOptions<T>(experiment: Experiment<T>) {
     coverage = 1;
   }
 
-  const equal = getEqualWeights(experiment.variations.length);
-
-  let weights: number[] = experiment.weights || equal;
-
-  if (weights.length !== experiment.variations.length) {
+  // Default to equal weights if missing or invalid
+  const equal = getEqualWeights(numVariations);
+  weights = weights || equal;
+  if (weights.length !== numVariations) {
     if (process.env.NODE_ENV !== 'production') {
       console.error(
         'Experiment.weights array must be the same length as Experiment.variations'
@@ -76,8 +76,14 @@ export function getWeightsFromOptions<T>(experiment: Experiment<T>) {
     weights = equal;
   }
 
-  // Scale weights by traffic coverage
-  return weights.map(n => n * coverage);
+  // Covert weights to ranges
+  const ranges: [number, number][] = [];
+  let start = 0;
+  weights.forEach(w => {
+    ranges.push([start, start + coverage * w]);
+    start += w;
+  });
+  return ranges;
 }
 
 export function getQueryStringOverride(id: string, url: string) {

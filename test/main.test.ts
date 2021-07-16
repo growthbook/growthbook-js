@@ -1,4 +1,9 @@
-import { getQueryStringOverride, getWeightsFromOptions } from '../src/util';
+import {
+  getQueryStringOverride,
+  getBucketRanges,
+  chooseVariation,
+  hashFnv32a,
+} from '../src/util';
 import GrowthBook from '../src';
 import { Experiment } from '../src/types';
 
@@ -21,7 +26,7 @@ const mockCallback = (growthbook: GrowthBook) => {
 // These are just here to silence the "function not used" eslint errors
 mockCallback(new GrowthBook({}));
 getQueryStringOverride('', '');
-getWeightsFromOptions({ key: '', variations: [0, 1] });
+getBucketRanges(2, 1);
 
 describe('experiments', () => {
   beforeEach(() => {
@@ -61,6 +66,94 @@ describe('experiments', () => {
 
     growthbook.destroy();
   });
+  it('bucket ranges', () => {
+    // Normal 50/50 split
+    expect(getBucketRanges(2, 1)).toEqual([
+      [0, 0.5],
+      [0.5, 1],
+    ]);
+
+    // Reduced coverage
+    expect(getBucketRanges(2, 0.5)).toEqual([
+      [0, 0.25],
+      [0.5, 0.75],
+    ]);
+
+    // Zero coverage
+    expect(getBucketRanges(2, 0)).toEqual([
+      [0, 0],
+      [0.5, 0.5],
+    ]);
+
+    // More variations
+    expect(getBucketRanges(4, 1)).toEqual([
+      [0, 0.25],
+      [0.25, 0.5],
+      [0.5, 0.75],
+      [0.75, 1],
+    ]);
+
+    // Uneven weights
+    expect(getBucketRanges(2, 1, [0.4, 0.6])).toEqual([
+      [0, 0.4],
+      [0.4, 1],
+    ]);
+
+    // Uneven weights, more variations
+    expect(getBucketRanges(3, 1, [0.2, 0.3, 0.5])).toEqual([
+      [0, 0.2],
+      [0.2, 0.5],
+      [0.5, 1],
+    ]);
+
+    // Uneven weights, more variations, reduced coverage
+    expect(getBucketRanges(3, 0.2, [0.2, 0.3, 0.5])).toEqual([
+      [0, 0.2 * 0.2],
+      [0.2, 0.2 + 0.3 * 0.2],
+      [0.5, 0.5 + 0.5 * 0.2],
+    ]);
+  });
+  it('choose variation', () => {
+    const evenRange: [number, number][] = [
+      [0, 0.5],
+      [0.5, 1],
+    ];
+    const reducedRange: [number, number][] = [
+      [0, 0.25],
+      [0.5, 0.75],
+    ];
+    const zeroRange: [number, number][] = [
+      [0, 0.5],
+      [0.5, 0.5],
+      [0.5, 1],
+    ];
+
+    expect(chooseVariation(0.2, evenRange)).toEqual(0);
+    expect(chooseVariation(0.6, evenRange)).toEqual(1);
+    expect(chooseVariation(0.4, evenRange)).toEqual(0);
+    expect(chooseVariation(0.8, evenRange)).toEqual(1);
+    expect(chooseVariation(0, evenRange)).toEqual(0);
+    expect(chooseVariation(0.5, evenRange)).toEqual(1);
+    expect(chooseVariation(1, evenRange)).toEqual(-1);
+
+    expect(chooseVariation(0.2, reducedRange)).toEqual(0);
+    expect(chooseVariation(0.6, reducedRange)).toEqual(1);
+    expect(chooseVariation(0.4, reducedRange)).toEqual(-1);
+    expect(chooseVariation(0.8, reducedRange)).toEqual(-1);
+
+    expect(chooseVariation(0.5, zeroRange)).toEqual(2);
+  });
+
+  it('hashing', () => {
+    expect(hashFnv32a('a') % 1000).toEqual(220);
+    expect(hashFnv32a('b') % 1000).toEqual(77);
+    expect(hashFnv32a('ab') % 1000).toEqual(946);
+    expect(hashFnv32a('def') % 1000).toEqual(652);
+    expect(hashFnv32a('8952klfjas09ujkasdf') % 1000).toEqual(549);
+    expect(hashFnv32a('123') % 1000).toEqual(11);
+    expect(hashFnv32a('___)((*":&') % 1000).toEqual(563);
+  });
+
   it('coverage', () => {
     const growthbook = new GrowthBook({});
 
@@ -70,7 +163,7 @@ describe('experiments', () => {
       coverage: 0.4,
     };
 
-    const expected = [-1, 0, 0, -1, -1, -1, 0, -1, 1];
+    const expected = [-1, 0, 0, -1, 1, -1, 0, 1, -1];
     expected.forEach((v, i) => {
       growthbook.context.user = { id: i + 1 + '' };
       const res = growthbook.run(exp);
@@ -149,6 +242,18 @@ describe('experiments', () => {
     growthbook.destroy();
   });
 
+  it('persists assignment when coverage changes', () => {
+    expect(getBucketRanges(2, 0.1, [0.4, 0.6])).toEqual([
+      [0, 0.4 * 0.1],
+      [0.4, 0.4 + 0.6 * 0.1],
+    ]);
+
+    expect(getBucketRanges(2, 1, [0.4, 0.6])).toEqual([
+      [0, 0.4],
+      [0.4, 1],
+    ]);
+  });
+
   it('handles weird experiment values', () => {
     const growthbook = new GrowthBook({ user: { id: '1' } });
     const spy = jest.spyOn(console, 'error').mockImplementation();
@@ -171,45 +276,32 @@ describe('experiments', () => {
       }).inExperiment
     ).toEqual(false);
 
-    expect(
-      getWeightsFromOptions({
-        key: 'my-test',
-        variations: [0, 1],
-        coverage: -0.2,
-      })
-    ).toEqual([0, 0]);
+    expect(getBucketRanges(2, -0.2)).toEqual([
+      [0, 0],
+      [0.5, 0.5],
+    ]);
 
-    expect(
-      getWeightsFromOptions({
-        key: 'my-test',
-        variations: [0, 1],
-        coverage: 1.5,
-      })
-    ).toEqual([0.5, 0.5]);
+    expect(getBucketRanges(2, 1.5)).toEqual([
+      [0, 0.5],
+      [0.5, 1],
+    ]);
 
-    expect(
-      getWeightsFromOptions({
-        key: 'my-test',
-        variations: [0, 1],
-        weights: [0.4, 0.1],
-      })
-    ).toEqual([0.5, 0.5]);
+    expect(getBucketRanges(2, 1, [0.4, 0.1])).toEqual([
+      [0, 0.5],
+      [0.5, 1],
+    ]);
 
-    expect(
-      getWeightsFromOptions({
-        key: 'my-test',
-        variations: [0, 1],
-        weights: [0.7, 0.6],
-      })
-    ).toEqual([0.5, 0.5]);
+    expect(getBucketRanges(2, 1, [0.7, 0.6])).toEqual([
+      [0, 0.5],
+      [0.5, 1],
+    ]);
 
-    expect(
-      getWeightsFromOptions({
-        key: 'my-test',
-        variations: [0, 1, 2, 3],
-        weights: [0.4, 0.4, 0.2],
-      })
-    ).toEqual([0.25, 0.25, 0.25, 0.25]);
+    expect(getBucketRanges(4, 1, [0.4, 0.4, 0.2])).toEqual([
+      [0, 0.25],
+      [0.25, 0.5],
+      [0.5, 0.75],
+      [0.75, 1],
+    ]);
 
     const res1 = growthbook.run({
       key: 'my-test',
@@ -672,15 +764,15 @@ describe('experiments', () => {
       '1': 0,
       '-1': 0,
     };
-    for (let i = 0; i < 1000; i++) {
+    for (let i = 0; i < 10000; i++) {
       growthbook.context.user = { id: i + '' };
       const res = growthbook.run(exp);
       const v = res.inExperiment ? res.value : -1;
       variations[v]++;
     }
-    expect(variations['0']).toEqual(200);
-    expect(variations['1']).toEqual(204);
-    expect(variations['-1']).toEqual(596);
+    expect(variations['0']).toEqual(2044);
+    expect(variations['1']).toEqual(1980);
+    expect(variations['-1']).toEqual(5976);
 
     // 3-way
     exp.coverage = 0.6;
@@ -698,10 +790,10 @@ describe('experiments', () => {
       variations[v]++;
     }
     expect(variations).toEqual({
-      '-1': 3973,
+      '-1': 3913,
       '0': 2044,
-      '1': 1992,
-      '2': 1991,
+      '1': 2000,
+      '2': 2043,
     });
 
     growthbook.destroy();
