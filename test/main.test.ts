@@ -134,7 +134,6 @@ describe('experiments', () => {
     expect(chooseVariation(0.8, evenRange)).toEqual(1);
     expect(chooseVariation(0, evenRange)).toEqual(0);
     expect(chooseVariation(0.5, evenRange)).toEqual(1);
-    expect(chooseVariation(1, evenRange)).toEqual(-1);
 
     expect(chooseVariation(0.2, reducedRange)).toEqual(0);
     expect(chooseVariation(0.6, reducedRange)).toEqual(1);

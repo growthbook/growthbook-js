@@ -1,3 +1,5 @@
+import { VariationRange } from 'types';
+
 export function hashFnv32a(str: string): number {
   let hval = 0x811c9dc5;
   const l = str.length;
@@ -10,13 +12,9 @@ export function hashFnv32a(str: string): number {
   return hval >>> 0;
 }
 
-export function chooseVariation(n: number, ranges: [number, number][]): number {
+export function chooseVariation(n: number, ranges: VariationRange[]): number {
   for (let i = 0; i < ranges.length; i++) {
-    if (
-      ranges[i][0] !== ranges[i][1] &&
-      n >= ranges[i][0] &&
-      n < ranges[i][1]
-    ) {
+    if (n >= ranges[i][0] && n < ranges[i][1]) {
       return i;
     }
   }
@@ -41,7 +39,7 @@ export function getBucketRanges(
   numVariations: number,
   coverage: number = 1,
   weights?: number[]
-) {
+): VariationRange[] {
   // Make sure coverage is within bounds
   if (coverage < 0) {
     if (process.env.NODE_ENV !== 'production') {
@@ -77,13 +75,12 @@ export function getBucketRanges(
   }
 
   // Covert weights to ranges
-  const ranges: [number, number][] = [];
-  let start = 0;
-  weights.forEach(w => {
-    ranges.push([start, start + coverage * w]);
-    start += w;
-  });
-  return ranges;
+  let cumulative = 0;
+  return weights.map(w => {
+    const start = cumulative;
+    cumulative += w;
+    return [start, start + coverage * w];
+  }) as VariationRange[];
 }
 
 export function getQueryStringOverride(id: string, url: string) {
