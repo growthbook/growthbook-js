@@ -4,7 +4,7 @@ import {
   chooseVariation,
   hashFnv32a,
 } from '../src/util';
-import GrowthBook from '../src';
+import { GrowthBook } from '../src';
 import { Experiment } from '../src/types';
 
 Object.defineProperty(window, 'location', {

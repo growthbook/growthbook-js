@@ -2,7 +2,7 @@
 
 Powerful A/B testing for JavaScript.
 
-![Build Status](https://github.com/growthbook/growthbook-js/workflows/Build/badge.svg) ![GZIP Size](https://img.shields.io/badge/gzip%20size-1.26KB-informational) ![NPM Version](https://img.shields.io/npm/v/@growthbook/growthbook)
+![Build Status](https://github.com/growthbook/growthbook-js/workflows/Build/badge.svg) ![GZIP Size](https://img.shields.io/badge/gzip%20size-1.28KB-informational) ![NPM Version](https://img.shields.io/npm/v/@growthbook/growthbook)
 
 -  **No external dependencies**
 -  **Lightweight and fast**
@@ -28,7 +28,7 @@ or use directly in your HTML without installing first:
 
 ```html
 <script type="module">
-import GrowthBook from 'https://unpkg.com/@growthbook/growthbook/dist/growthbook.esm.js';
+import {GrowthBook} from 'https://unpkg.com/@growthbook/growthbook/dist/growthbook.esm.js';
 //...
 </script>
 ```
@@ -36,7 +36,7 @@ import GrowthBook from 'https://unpkg.com/@growthbook/growthbook/dist/growthbook
 ## Quick Usage
 
 ```ts
-import GrowthBook from '@growthbook/growthbook';
+import {GrowthBook} from '@growthbook/growthbook';
 
 // Define the experimental context
 const growthbook = new GrowthBook({

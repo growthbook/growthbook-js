@@ -10,7 +10,7 @@ import {
 
 export { Context, Experiment, Result, ExperimentOverride } from './types';
 
-export default class GrowthBook {
+class GrowthBook {
   context: Context;
 
   private _trackedExperiments = new Set();
@@ -301,3 +301,6 @@ export default class GrowthBook {
     return false;
   }
 }
+
+export { GrowthBook };
+export default GrowthBook;
