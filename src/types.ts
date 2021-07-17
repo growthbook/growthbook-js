@@ -45,3 +45,5 @@ export type SubscriptionFunction = (
   experiment: Experiment<any>,
   result: Result<any>
 ) => void;
+
+export type VariationRange = [number, number];

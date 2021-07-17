@@ -2,7 +2,7 @@ import { Context, Experiment, Result, SubscriptionFunction } from './types';
 import {
   getUrlRegExp,
   isIncluded,
-  getWeightsFromOptions,
+  getBucketRanges,
   hashFnv32a,
   chooseVariation,
   getQueryStringOverride,
@@ -180,11 +180,15 @@ export default class GrowthBook {
     // 14. Compute a hash
     const n = (hashFnv32a(hashValue + experiment.key) % 1000) / 1000;
 
-    // 15. Default to equal weights and apply coverage
-    const weights = getWeightsFromOptions(experiment);
+    // 15. Get bucket ranges
+    const ranges = getBucketRanges(
+      experiment.variations.length,
+      experiment.coverage || 1,
+      experiment.weights
+    );
 
     // 16. Assign a variation
-    const assigned = chooseVariation(n, weights);
+    const assigned = chooseVariation(n, ranges);
 
     // 17. Return if not in experiment
     if (assigned < 0) {
