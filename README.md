@@ -2,7 +2,7 @@
 
 Powerful A/B testing for JavaScript.
 
-![Build Status](https://github.com/growthbook/growthbook-js/workflows/Build/badge.svg) ![GZIP Size](https://img.shields.io/badge/gzip%20size-1.27KB-informational) ![NPM Version](https://img.shields.io/npm/v/@growthbook/growthbook)
+![Build Status](https://github.com/growthbook/growthbook-js/workflows/Build/badge.svg) ![GZIP Size](https://img.shields.io/badge/gzip%20size-1.26KB-informational) ![NPM Version](https://img.shields.io/npm/v/@growthbook/growthbook)
 
 -  **No external dependencies**
 -  **Lightweight and fast**

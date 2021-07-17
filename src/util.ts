@@ -31,10 +31,6 @@ export function getUrlRegExp(regexString: string): RegExp | null {
   }
 }
 
-export function getEqualWeights(n: number): number[] {
-  return new Array(n).fill(1 / n);
-}
-
 export function getBucketRanges(
   numVariations: number,
   coverage: number = 1,
@@ -54,7 +50,7 @@ export function getBucketRanges(
   }
 
   // Default to equal weights if missing or invalid
-  const equal = getEqualWeights(numVariations);
+  const equal = new Array(numVariations).fill(1 / numVariations);
   weights = weights || equal;
   if (weights.length !== numVariations) {
     if (process.env.NODE_ENV !== 'production') {
