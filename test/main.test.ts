@@ -23,14 +23,10 @@ const mockCallback = (growthbook: GrowthBook) => {
   return onExperimentViewed.mock;
 };
 
-// These are just here to silence the "function not used" eslint errors
-mockCallback(new GrowthBook({}));
-getQueryStringOverride('', '');
-getBucketRanges(2, 1);
-
 describe('experiments', () => {
   beforeEach(() => {
     window.location.href = '';
+    delete window.growthbookDev;
   });
 
   it('defaultWeights', () => {
@@ -383,6 +379,8 @@ describe('experiments', () => {
         url: /^\/bath/,
       }).inExperiment
     ).toEqual(false);
+
+    growthbook.destroy();
   });
 
   it('force variation', () => {
@@ -556,6 +554,8 @@ describe('experiments', () => {
     };
     growthbook.run(exp);
     expect(mock.calls.length).toEqual(0);
+
+    growthbook.destroy();
   });
 
   it('querystring force invalid url', () => {
@@ -905,5 +905,66 @@ describe('experiments', () => {
     expect(assignedArr[1].v).toEqual(0);
 
     growthbook.destroy();
+  });
+
+  it('renders when a variation is forced', () => {
+    const growthbook = new GrowthBook({
+      user: { id: '1' },
+    });
+    let called = false;
+    growthbook.setRenderer(() => {
+      called = true;
+    });
+
+    expect(called).toEqual(false);
+    growthbook.forceVariation('my-test', 1);
+    expect(growthbook.context.forcedVariations).toEqual({ 'my-test': 1 });
+    expect(called).toEqual(true);
+
+    growthbook.destroy();
+  });
+
+  it('inits existing devmode', () => {
+    let called = false;
+    window.growthbookDev = {
+      init: () => {
+        called = true;
+      },
+    };
+
+    const growthbook = new GrowthBook({});
+    expect(called).toEqual(true);
+
+    growthbook.destroy();
+  });
+
+  it('inits devmode from event', () => {
+    const growthbook = new GrowthBook({});
+
+    let called = false;
+    window.growthbookDev = {
+      init: () => {
+        called = true;
+      },
+    };
+
+    document.body.dispatchEvent(new Event('GBDEV_LOADED'));
+    expect(called).toEqual(true);
+
+    growthbook.destroy();
+  });
+
+  it('stops listening for devmode event after destroy', () => {
+    const growthbook = new GrowthBook({});
+    growthbook.destroy();
+
+    let called = false;
+    window.growthbookDev = {
+      init: () => {
+        called = true;
+      },
+    };
+    document.body.dispatchEvent(new Event('GBDEV_LOADED'));
+    expect(called).toEqual(false);
   });
 });
