@@ -8,11 +8,25 @@ import {
   getQueryStringOverride,
 } from './util';
 
+const EVENT_NAME = 'GBDEV_LOADED';
+
+declare global {
+  interface Window {
+    growthbookDev?: {
+      init: (gb: GrowthBook) => void;
+    };
+  }
+}
+
 export { Context, Experiment, Result, ExperimentOverride } from './types';
+
+const isBrowser = typeof window !== 'undefined';
 
 class GrowthBook {
   context: Context;
 
+  private devcb: null | (() => void) = null;
+  private _renderer: null | (() => void) = null;
   private _trackedExperiments = new Set();
   public debug = false;
   private subscriptions = new Set<SubscriptionFunction>();
@@ -26,6 +40,12 @@ class GrowthBook {
 
   constructor(context: Context) {
     this.context = context;
+
+    if (isBrowser) {
+      this.devcb = () => this.onDevLoaded();
+      document.body.addEventListener(EVENT_NAME, this.devcb, false);
+      this.onDevLoaded();
+    }
   }
 
   public subscribe(cb: SubscriptionFunction): () => void {
@@ -45,6 +65,32 @@ class GrowthBook {
     this.subscriptions.clear();
     this.assigned.clear();
     this._trackedExperiments.clear();
+
+    if (isBrowser && this.devcb) {
+      document.body.removeEventListener(EVENT_NAME, this.devcb, false);
+    }
+  }
+
+  private onDevLoaded() {
+    if (!isBrowser) return;
+    if (window.growthbookDev && window.growthbookDev.init) {
+      window.growthbookDev.init(this);
+    }
+  }
+
+  public setRenderer(renderer: () => void) {
+    this._renderer = renderer;
+  }
+
+  public forceVariation(key: string, variation: number) {
+    if (!this.context) return;
+
+    this.context.forcedVariations = this.context.forcedVariations || {};
+    this.context.forcedVariations[key] = variation;
+
+    if (this._renderer) {
+      this._renderer();
+    }
   }
 
   public run<T>(experiment: Experiment<T>): Result<T> {
@@ -276,10 +322,7 @@ class GrowthBook {
   }
 
   private getContextUrl() {
-    return (
-      this.context.url ||
-      (typeof window !== 'undefined' ? window.location.href : '')
-    );
+    return this.context.url || (isBrowser ? window.location.href : '');
   }
 
   private urlIsValid(urlRegex: RegExp): boolean {
